@@ -141,22 +141,7 @@ macro_rules! hal {
                     //        8-bit
                     // DS: 8-bit data size
                     // SSOE: Slave Select output disabled
-                    spi.cr2
-                        .write(|w| unsafe {
-                            w.frxth().set_bit().ds().bits(0b111).ssoe().clear_bit()
-                        });
-
-                    let br = match clocks.$pclkX().0 / freq.into().0 {
-                        0 => unreachable!(),
-                        1..=2 => 0b000,
-                        3..=5 => 0b001,
-                        6..=11 => 0b010,
-                        12..=23 => 0b011,
-                        24..=39 => 0b100,
-                        40..=95 => 0b101,
-                        96..=191 => 0b110,
-                        _ => 0b111,
-                    };
+                    spi.cr2.write(|w| w.frxth().set_bit().ds().eight_bit().ssoe().clear_bit());
 
                     // CPHA: phase
                     // CPOL: polarity
@@ -174,12 +159,19 @@ macro_rules! hal {
                             .cpol()
                             .bit(mode.polarity == Polarity::IdleHigh)
                             .mstr()
-                            .set_bit()
-                            .br();
+                            .set_bit();
 
-                        unsafe {
-                            w.bits(br);
-                        }
+                        match clocks.$pclkX().0 / freq.into().0 {
+                            0 => unreachable!(),
+                            1..=2 => w.br().div2(),
+                            3..=5 => w.br().div4(),
+                            6..=11 => w.br().div8(),
+                            12..=23 => w.br().div16(),
+                            24..=39 => w.br().div32(),
+                            40..=95 => w.br().div64(),
+                            96..=191 => w.br().div128(),
+                            _ => w.br().div256(),
+                        };
 
                         w.spe()
                             .set_bit()
