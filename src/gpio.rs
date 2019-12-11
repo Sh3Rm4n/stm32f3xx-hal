@@ -154,6 +154,7 @@ macro_rules! gpio {
                             ), not(any(
                                 $(feature = $device_except,)*
                             ))))]
+                            // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                             Gpio::$GPIOX => (*$GPIOX::ptr()).bsrr.write(|w| w.bits(1 << self.i)),
                         )+
                     }
@@ -171,6 +172,7 @@ macro_rules! gpio {
                             ), not(any(
                                 $(feature = $device_except,)*
                             ))))]
+                            // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                             Gpio::$GPIOX => (*$GPIOX::ptr()).bsrr.write(|w| w.bits(1 << (16 + self.i))),
                         )+
                     }
@@ -197,6 +199,7 @@ macro_rules! gpio {
                             ), not(any(
                                 $(feature = $device_except,)*
                             ))))]
+                            // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                             Gpio::$GPIOX => (*$GPIOX::ptr()).idr.read().bits() & (1 << self.i) == 0,
                         )+
                     }
@@ -220,6 +223,7 @@ macro_rules! gpio {
                             ), not(any(
                                 $(feature = $device_except,)*
                             ))))]
+                            // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                             Gpio::$GPIOX => (*$GPIOX::ptr()).odr.read().bits() & (1 << self.i) == 0,
                         )+
                     }
@@ -382,13 +386,17 @@ macro_rules! gpio {
                 impl<MODE> OutputPin for $PXx<Output<MODE>> {
                     type Error = ();
 
+                // TODO
+                // https://docs.rs/stm32f3/0.9.0/src/stm32f3/stm32f303/gpioa/bsrr.rs.html#1265-1267
                     fn set_high(&mut self) -> Result<(), Self::Error> {
+                        // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                         // NOTE(unsafe) atomic write to a stateless register
                         unsafe { (*$GPIOX::ptr()).bsrr.write(|w| w.bits(1 << self.i)) }
                         Ok(())
                     }
 
                     fn set_low(&mut self) -> Result<(), Self::Error> {
+                        // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                         // NOTE(unsafe) atomic write to a stateless register
                         unsafe { (*$GPIOX::ptr()).bsrr.write(|w| w.bits(1 << (16 + self.i))) }
                         Ok(())
@@ -404,6 +412,7 @@ macro_rules! gpio {
                     }
 
                      fn is_low(&self) -> Result<bool, Self::Error> {
+                        // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                         // NOTE(unsafe) atomic read with no side effects
                         Ok(unsafe { (*$GPIOX::ptr()).idr.read().bits() & (1 << self.i) == 0 })
                     }
@@ -416,6 +425,7 @@ macro_rules! gpio {
                     }
 
                     fn is_set_low(&self) -> Result<bool, Self::Error> {
+                        // TODO(Sh3Rm4n) Change this to using `variant` when array indexed is implmented via svd2rust.
                         // NOTE(unsafe) atomic read with no side effects
                         Ok(unsafe { (*$GPIOX::ptr()).odr.read().bits() & (1 << self.i) == 0 })
                     }
