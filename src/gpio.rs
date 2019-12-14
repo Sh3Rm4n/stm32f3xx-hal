@@ -106,7 +106,8 @@ macro_rules! gpio {
             gpio_mapped_iorst: $iopxrst:ident,
             partially_erased_pin: $PXx:ident,
             pins: [
-                $($PXi:ident: ($pxi:ident, $i:expr, $MODE:ty, $moderi:ident, $AFR:ident, $afri:ident, $pupdri:ident, $oti:ident, [
+                $($PXi:ident: ($pxi:ident, $i:expr, $MODE:ty, $moderi:ident, $AFR:ident, $afri:ident,
+                  $bsi:ident, $bri:ident, $odri:ident, $idri:ident, $pupdri:ident, $oti:ident, [
                     $($AFi_common:ty: ($into_afi_common:ident, $afi_common:ident,),)*
                 ], [
                     $($AFi:ty: ($into_afi:ident, $afi:ident, [$($afi_devices:expr,)*],),)*
@@ -609,13 +610,13 @@ macro_rules! gpio {
 
                         fn set_high(&mut self) -> Result<(), Self::Error> {
                             // NOTE(unsafe) atomic write to a stateless register
-                            unsafe { (*$GPIOX::ptr()).bsrr.write(|w| w.bits(1 << $i)) }
+                            unsafe { (*$GPIOX::ptr()).bsrr.write(|w| w.$bsi().set()) }
                             Ok(())
                         }
 
                         fn set_low(&mut self) -> Result<(), Self::Error> {
                             // NOTE(unsafe) atomic write to a stateless register
-                            unsafe { (*$GPIOX::ptr()).bsrr.write(|w| w.bits(1 << (16 + $i))) }
+                            unsafe { (*$GPIOX::ptr()).bsrr.write(|w| w.$bri().reset()) }
                             Ok(())
                         }
                     }
@@ -625,24 +626,24 @@ macro_rules! gpio {
                         type Error = ();
 
                         fn is_high(&self) -> Result<bool, Self::Error> {
-                            Ok(!self.is_low()?)
+                            Ok(unsafe { (*$GPIOX::ptr()).idr.read().$idri().is_high()})
                         }
 
                          fn is_low(&self) -> Result<bool, Self::Error> {
                             // NOTE(unsafe) atomic read with no side effects
-                            Ok(unsafe { (*$GPIOX::ptr()).idr.read().bits() & (1 << $i) == 0 })
+                            Ok(unsafe { (*$GPIOX::ptr()).idr.read().$idri().is_low()})
                         }
                     }
 
                     #[cfg(feature = "unproven")]
                     impl<MODE> StatefulOutputPin for $PXi<Output<MODE>> {
                         fn is_set_high(&self) -> Result<bool, Self::Error> {
-                            self.is_set_low().map(|b| !b)
+                            Ok(unsafe { (*$GPIOX::ptr()).odr.read().$odri().is_high()})
                         }
 
                         fn is_set_low(&self) -> Result<bool, Self::Error> {
                             // NOTE(unsafe) atomic read with no side effects
-                            Ok(unsafe { (*$GPIOX::ptr()).odr.read().bits() & (1 << $i) == 0 })
+                            Ok(unsafe { (*$GPIOX::ptr()).odr.read().$odri().is_low()})
                         }
                     }
 
@@ -676,7 +677,7 @@ gpio!([
         gpio_mapped_iorst: ioparst,
         partially_erased_pin: PAx,
         pins: [
-            PA0: (pa0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PA0: (pa0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -688,7 +689,7 @@ gpio!([
                 AF10: (into_af10, af10, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f358", "stm32f398",],),
                 AF11: (into_af11, af11, ["stm32f373", "stm32f378",],),
             ]),
-            PA1: (pa1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PA1: (pa1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -700,7 +701,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f373", "stm32f378",],),
                 AF11: (into_af11, af11, ["stm32f373", "stm32f378",],),
             ]),
-            PA2: (pa2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PA2: (pa2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -712,7 +713,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f373", "stm32f378",],),
                 AF11: (into_af11, af11, ["stm32f373", "stm32f378",],),
             ]),
-            PA3: (pa3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [
+            PA3: (pa3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -723,7 +724,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f373", "stm32f378",],),
                 AF11: (into_af11, af11, ["stm32f373", "stm32f378",],),
             ]),
-            PA4: (pa4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PA4: (pa4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
                 AF15: (into_af15, af15,),
@@ -733,7 +734,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f301", "stm32f318", "stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe","stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF10: (into_af10, af10, ["stm32f373", "stm32f378",],),
             ]),
-            PA5: (pa5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [
+            PA5: (pa5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF15: (into_af15, af15,),
@@ -743,7 +744,7 @@ gpio!([
                 AF9: (into_af9, af9, ["stm32f373", "stm32f378",],),
                 AF10: (into_af10, af10, ["stm32f373", "stm32f378",],),
             ]),
-            PA6: (pa6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PA6: (pa6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF15: (into_af15, af15,),
@@ -756,7 +757,7 @@ gpio!([
                 AF9: (into_af9, af9, ["stm32f373", "stm32f378",],),
                 AF13: (into_af13, af13, ["stm32f334", "stm32f328",],),
             ]),
-            PA7: (pa7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PA7: (pa7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF15: (into_af15, af15,),
@@ -768,7 +769,7 @@ gpio!([
                 AF8: (into_af8, af8, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f373", "stm32f378", "stm32f358",],),
                 AF9: (into_af9, af9, ["stm32f373", "stm32f378",],),
             ]),
-            PA8: (pa8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [
+            PA8: (pa8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [
                 AF0: (into_af0, af0,),
                 AF7: (into_af7, af7,),
                 AF15: (into_af15, af15,),
@@ -782,7 +783,7 @@ gpio!([
                 AF10: (into_af10, af10, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PA9: (pa9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [
+            PA9: (pa9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
                 AF9: (into_af9, af9,),
@@ -796,7 +797,7 @@ gpio!([
                 AF8: (into_af8, af8, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f358", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PA10: (pa10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PA10: (pa10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -811,7 +812,7 @@ gpio!([
                 AF11: (into_af11, af11, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f358", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PA11: (pa11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [
+            PA11: (pa11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [
                 AF6: (into_af6, af6,),
                 AF7: (into_af7, af7,),
                 AF15: (into_af15, af15,),
@@ -826,7 +827,7 @@ gpio!([
                 AF13: (into_af13, af13, ["stm32f334",],),
                 AF14: (into_af14, af14, ["stm32f302", "stm32f303xb", "stm32f303xc",],),
             ]),
-            PA12: (pa12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [
+            PA12: (pa12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [
                 AF1: (into_af1, af1,),
                 AF6: (into_af6, af6,),
                 AF7: (into_af7, af7,),
@@ -841,7 +842,7 @@ gpio!([
                 AF13: (into_af13, af13, ["stm32f334",],),
                 AF14: (into_af14, af14, ["stm32f302", "stm32f303xb", "stm32f303xc",],),
             ]),
-            PA13: (pa13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [
+            PA13: (pa13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
@@ -853,7 +854,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f373", "stm32f378", "stm32f398",],),
                 AF10: (into_af10, af10, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
             ]),
-            PA14: (pa14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [
+            PA14: (pa14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [
                 AF0: (into_af0, af0,),
                 AF3: (into_af3, af3,),
                 AF4: (into_af4, af4,),
@@ -864,7 +865,7 @@ gpio!([
                 AF7: (into_af7, af7, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF10: (into_af10, af10, ["stm32f373", "stm32f378",],),
             ]),
-            PA15: (pa15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [
+            PA15: (pa15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF4: (into_af4, af4,),
@@ -901,7 +902,7 @@ gpio!([
         gpio_mapped_iorst: iopbrst,
         partially_erased_pin: PBx,
         pins: [
-            PB0: (pb0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PB0: (pb0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF3: (into_af3, af3,),
                 AF15: (into_af15, af15,),
             ], [
@@ -911,7 +912,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF10: (into_af10, af10, ["stm32f378",],),
             ]),
-            PB1: (pb1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PB1: (pb1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF3: (into_af3, af3,),
                 AF15: (into_af15, af15,),
             ], [
@@ -921,12 +922,12 @@ gpio!([
                 AF8: (into_af8, af8, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB2: (pb2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [], [
+            PB2: (pb2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [], [
                 AF3: (into_af3, af3, ["stm32f301", "stm32f302", "stm32f303", "stm32f334",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
                 AF15: (into_af15, af15, ["stm32f301", "stm32f302", "stm32f303", "stm32f334",],),
             ]),
-            PB3: (pb3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [
+            PB3: (pb3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
@@ -942,7 +943,7 @@ gpio!([
                 AF12: (into_af12, af12, ["stm32f334",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB4: (pb4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PB4: (pb4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
@@ -957,7 +958,7 @@ gpio!([
                 AF9: (into_af9, af9, ["stm32f378",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB5: (pb5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [
+            PB5: (pb5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [
                 AF1: (into_af1, af1,),
                 AF4: (into_af4, af4,),
                 AF7: (into_af7, af7,),
@@ -972,7 +973,7 @@ gpio!([
                 AF11: (into_af11, af11, ["stm32f378",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB6: (pb6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PB6: (pb6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF4: (into_af4, af4,),
@@ -988,7 +989,7 @@ gpio!([
                 AF12: (into_af12, af12, ["stm32f334",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB7: (pb7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PB7: (pb7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF4: (into_af4, af4,),
@@ -1003,7 +1004,7 @@ gpio!([
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB8: (pb8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [
+            PB8: (pb8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF4: (into_af4, af4,),
@@ -1020,7 +1021,7 @@ gpio!([
                 AF12: (into_af12, af12, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB9: (pb9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [
+            PB9: (pb9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [
                 AF1: (into_af1, af1,),
                 AF4: (into_af4, af4,),
                 AF6: (into_af6, af6,),
@@ -1035,7 +1036,7 @@ gpio!([
                 AF11: (into_af11, af11, ["stm32f378",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB10: (pb10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PB10: (pb10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -1045,14 +1046,14 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f378",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB11: (pb11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], [
+            PB11: (pb11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
                 AF15: (into_af15, af15, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
             ]),
-            PB12: (pb12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], [
+            PB12: (pb12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], [
                 AF3: (into_af3, af3, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f301", "stm32f318", "stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f301", "stm32f318", "stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f358", "stm32f398",],),
@@ -1061,7 +1062,7 @@ gpio!([
                 AF13: (into_af13, af13, ["stm32f334",],),
                 AF15: (into_af15, af15, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
             ]),
-            PB13: (pb13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], [
+            PB13: (pb13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], [
                 AF3: (into_af3, af3, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f301", "stm32f318", "stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe", "stm32f358", "stm32f398",],),
                 AF6: (into_af6, af6, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
@@ -1069,7 +1070,7 @@ gpio!([
                 AF13: (into_af13, af13, ["stm32f334",],),
                 AF15: (into_af15, af15, ["stm32f301", "stm32f318", "stm32f302", "stm32f303", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
             ]),
-            PB14: (pb14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [
+            PB14: (pb14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
@@ -1080,7 +1081,7 @@ gpio!([
                 AF9: (into_af9, af9, ["stm32f378",],),
                 AF13: (into_af13, af13, ["stm32f334",],),
             ]),
-            PB15: (pb15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [
+            PB15: (pb15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF15: (into_af15, af15,),
@@ -1106,22 +1107,22 @@ gpio!([
         gpio_mapped_iorst: iopbrst,
         partially_erased_pin: PBx,
         pins: [
-            PB0: (pb0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PB0: (pb0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF2: (into_af2, af2,),
                 AF3: (into_af3, af3,),
                 AF5: (into_af5, af5,),
                 AF10: (into_af10, af10,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB1: (pb1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PB1: (pb1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF2: (into_af2, af2,),
                 AF3: (into_af3, af3,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB2: (pb2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PB2: (pb2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF15: (into_af15, af15,),
             ], []),
-            PB3: (pb3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [
+            PB3: (pb3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1133,7 +1134,7 @@ gpio!([
                 AF10: (into_af10, af10,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB4: (pb4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PB4: (pb4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1145,7 +1146,7 @@ gpio!([
                 AF10: (into_af10, af10,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB5: (pb5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [
+            PB5: (pb5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF4: (into_af4, af4,),
@@ -1156,7 +1157,7 @@ gpio!([
                 AF11: (into_af11, af11,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB6: (pb6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PB6: (pb6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF3: (into_af3, af3,),
@@ -1167,7 +1168,7 @@ gpio!([
                 AF11: (into_af11, af11,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB7: (pb7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PB7: (pb7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF3: (into_af3, af3,),
@@ -1178,7 +1179,7 @@ gpio!([
                 AF11: (into_af11, af11,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB8: (pb8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [
+            PB8: (pb8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF3: (into_af3, af3,),
@@ -1191,7 +1192,7 @@ gpio!([
                 AF11: (into_af11, af11,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB9: (pb9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [
+            PB9: (pb9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF4: (into_af4, af4,),
@@ -1203,7 +1204,7 @@ gpio!([
                 AF11: (into_af11, af11,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB10: (pb10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PB10: (pb10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF5: (into_af5, af5,),
@@ -1211,7 +1212,7 @@ gpio!([
                 AF7: (into_af7, af7,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB11: (pb11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [
+            PB11: (pb11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF5: (into_af5, af5,),
@@ -1219,7 +1220,7 @@ gpio!([
                 AF7: (into_af7, af7,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB14: (pb14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [
+            PB14: (pb14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF5: (into_af5, af5,),
@@ -1227,7 +1228,7 @@ gpio!([
                 AF9: (into_af9, af9,),
                 AF15: (into_af15, af15,),
             ], []),
-            PB15: (pb15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [
+            PB15: (pb15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1257,39 +1258,39 @@ gpio!([
         gpio_mapped_iorst: iopcrst,
         partially_erased_pin: PCx,
         pins: [
-            PC0: (pc0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [], [
+            PC0: (pc0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f398",],),
             ]),
-            PC1: (pc1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], [
+            PC1: (pc1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f398",],),
             ]),
-            PC2: (pc2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [], [
+            PC2: (pc2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
             ]),
-            PC3: (pc3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [], [
+            PC3: (pc3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
                 AF6: (into_af6, af6, ["stm32f301", "stm32f334", "stm32f358", "stm32f398",],),
             ]),
-            PC4: (pc4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [], [
+            PC4: (pc4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
             ]),
-            PC5: (pc5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], [
+            PC5: (pc5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f301", "stm32f334", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
             ]),
-            PC6: (pc6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [], [
+            PC6: (pc6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f334",],),
@@ -1298,7 +1299,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f301", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f301", "stm32f334", "stm32f358", "stm32f398",],),
             ]),
-            PC7: (pc7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [], [
+            PC7: (pc7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f334",],),
@@ -1307,7 +1308,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f301", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f358", "stm32f398",],),
             ]),
-            PC8: (pc8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [], [
+            PC8: (pc8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f334",],),
@@ -1315,7 +1316,7 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f358", "stm32f398",],),
             ]),
-            PC9: (pc9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], [
+            PC9: (pc9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f301", "stm32f334", "stm32f398",],),
@@ -1323,7 +1324,7 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f301", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF6: (into_af6, af6, ["stm32f358", "stm32f398",],),
             ]),
-            PC10: (pc10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [], [
+            PC10: (pc10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378",],),
                 AF4: (into_af4, af4, ["stm32f358", "stm32f398",],),
@@ -1331,16 +1332,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f301", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
             ]),
-            PC11: (pc11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], [
-                AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
-                AF2: (into_af2, af2, ["stm32f373", "stm32f378",],),
-                AF3: (into_af3, af3, ["stm32f334",],),
-                AF4: (into_af4, af4, ["stm32f358", "stm32f398",],),
-                AF5: (into_af5, af5, ["stm32f358", "stm32f398",],),
-                AF6: (into_af6, af6, ["stm32f301", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
-                AF7: (into_af7, af7, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
-            ]),
-            PC12: (pc12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], [
+            PC11: (pc11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], [
                 AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378",],),
                 AF3: (into_af3, af3, ["stm32f334",],),
@@ -1349,14 +1341,23 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f301", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
             ]),
-            PC13: (pc13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], [
+            PC12: (pc12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], [
+                AF1: (into_af1, af1, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
+                AF2: (into_af2, af2, ["stm32f373", "stm32f378",],),
+                AF3: (into_af3, af3, ["stm32f334",],),
+                AF4: (into_af4, af4, ["stm32f358", "stm32f398",],),
+                AF5: (into_af5, af5, ["stm32f358", "stm32f398",],),
+                AF6: (into_af6, af6, ["stm32f301", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
+                AF7: (into_af7, af7, ["stm32f301", "stm32f373", "stm32f378", "stm32f334", "stm32f358", "stm32f398",],),
+            ]),
+            PC13: (pc13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], [
                 AF1: (into_af1, af1, ["stm32f378", "stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f301", "stm32f318", "stm32f334", "stm32f328", "stm32f358", "stm32f398",],),
             ]),
-            PC14: (pc14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], [
+            PC14: (pc14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], [
                 AF1: (into_af1, af1, ["stm32f378", "stm32f398",],),
             ]),
-            PC15: (pc15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], [
+            PC15: (pc15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], [
                 AF1: (into_af1, af1, ["stm32f378", "stm32f398",],),
             ]),
         ],
@@ -1374,42 +1375,42 @@ gpio!([
         gpio_mapped_iorst: iopcrst,
         partially_erased_pin: PCx,
         pins: [
-            PC0: (pc0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PC0: (pc0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF1: (into_af1, af1,),
             ], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PC1: (pc1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PC1: (pc1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
             ], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PC2: (pc2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PC2: (pc2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
             ], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe", "stm32f303x6", "stm32f303x8",],),
                 AF3: (into_af3, af3, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC3: (pc3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [
+            PC3: (pc3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [
                 AF1: (into_af1, af1,),
                 AF6: (into_af6, af6,),
             ], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe", "stm32f303x6", "stm32f303x8",],),
             ]),
-            PC4: (pc4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PC4: (pc4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF1: (into_af1, af1,),
                 AF7: (into_af7, af7,),
             ], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe", "stm32f303x6", "stm32f303x8",],),
             ]),
-            PC5: (pc5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [
+            PC5: (pc5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF7: (into_af7, af7,),
             ], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe", "stm32f303x6", "stm32f303x8",],),
             ]),
-            PC6: (pc6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PC6: (pc6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF7: (into_af7, af7,),
@@ -1417,7 +1418,7 @@ gpio!([
                 AF4: (into_af4, af4, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF6: (into_af6, af6, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC7: (pc7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PC7: (pc7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
@@ -1425,14 +1426,14 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF7: (into_af7, af7, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC8: (pc8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [
+            PC8: (pc8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF4: (into_af4, af4, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF7: (into_af7, af7, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC9: (pc9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [
+            PC9: (pc9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
@@ -1441,7 +1442,7 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF6: (into_af6, af6, ["stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC10: (pc10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PC10: (pc10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF7: (into_af7, af7,),
             ], [
@@ -1449,7 +1450,7 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF6: (into_af6, af6, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC11: (pc11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [
+            PC11: (pc11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [
                 AF1: (into_af1, af1,),
                 AF7: (into_af7, af7,),
             ], [
@@ -1457,7 +1458,7 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF6: (into_af6, af6, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC12: (pc12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [
+            PC12: (pc12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [
                 AF1: (into_af1, af1,),
                 AF7: (into_af7, af7,),
             ], [
@@ -1465,15 +1466,15 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
                 AF6: (into_af6, af6, ["stm32f302", "stm32f303xb", "stm32f303xc", "stm32f303xd", "stm32f303xe",],),
             ]),
-            PC13: (pc13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [
+            PC13: (pc13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [
                 AF4: (into_af4, af4,),
             ], [
                 AF1: (into_af1, af1, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PC14: (pc14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], [
+            PC14: (pc14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], [
                 AF1: (into_af1, af1, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PC15: (pc15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], [
+            PC15: (pc15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], [
                 AF1: (into_af1, af1, ["stm32f303xd", "stm32f303xe",],),
             ]),
         ],
@@ -1490,7 +1491,7 @@ gpio!([
         gpio_mapped_iorst: iopdrst,
         partially_erased_pin: PDx,
         pins: [
-            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
             ], []),
         ],
@@ -1512,7 +1513,7 @@ gpio!([
         gpio_mapped_iorst: iopdrst,
         partially_erased_pin: PDx,
         pins: [
-            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], []),
@@ -1530,25 +1531,25 @@ gpio!([
         gpio_mapped_iorst: iopdrst,
         partially_erased_pin: PDx,
         pins: [
-            PD0: (pd0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [], []),
-            PD1: (pd1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], []),
-            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PD0: (pd0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [], []),
+            PD1: (pd1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], []),
+            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], []),
-            PD3: (pd3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [], []),
-            PD4: (pd4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [], []),
-            PD5: (pd5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], []),
-            PD6: (pd6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [], []),
-            PD7: (pd7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [], []),
-            PD8: (pd8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [], []),
-            PD9: (pd9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], []),
-            PD10: (pd10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [], []),
-            PD11: (pd11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], []),
-            PD12: (pd12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], []),
-            PD13: (pd13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], []),
-            PD14: (pd14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], []),
-            PD15: (pd15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], []),
+            PD3: (pd3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [], []),
+            PD4: (pd4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [], []),
+            PD5: (pd5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], []),
+            PD6: (pd6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [], []),
+            PD7: (pd7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [], []),
+            PD8: (pd8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [], []),
+            PD9: (pd9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], []),
+            PD10: (pd10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [], []),
+            PD11: (pd11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], []),
+            PD12: (pd12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], []),
+            PD13: (pd13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], []),
+            PD14: (pd14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], []),
+            PD15: (pd15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], []),
         ],
     },
     {
@@ -1573,13 +1574,13 @@ gpio!([
         gpio_mapped_iorst: iopdrst,
         partially_erased_pin: PDx,
         pins: [
-            PD0: (pd0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [], [
+            PD0: (pd0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD1: (pd1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], [
+            PD1: (pd1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f373", "stm32f378",],),
                 AF4: (into_af4, af4, ["stm32f303", "stm32f358", "stm32f398",],),
@@ -1587,88 +1588,88 @@ gpio!([
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [], [
+            PD2: (pd2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f328", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f328", "stm32f358", "stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f303", "stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f302", "stm32f303", "stm32f358", "stm32f398",],),
             ]),
-            PD3: (pd3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [], [
+            PD3: (pd3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD4: (pd4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [], [
+            PD4: (pd4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD5: (pd5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], [
+            PD5: (pd5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD6: (pd6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [], [
-                AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
-                AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f358", "stm32f398",],),
-                AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
-                AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
-                AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
-            ]),
-            PD7: (pd7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [], [
+            PD6: (pd6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD8: (pd8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [], [
+            PD7: (pd7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [], [
+                AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
+                AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f358", "stm32f398",],),
+                AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
+                AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
+                AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
+            ]),
+            PD8: (pd8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f373", "stm32f378",],),
                 AF5: (into_af5, af5, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD9: (pd9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], [
+            PD9: (pd9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f373", "stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD10: (pd10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [], [
+            PD10: (pd10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD11: (pd11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], [
+            PD11: (pd11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD12: (pd12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], [
+            PD12: (pd12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD13: (pd13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], [
+            PD13: (pd13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD14: (pd14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], [
+            PD14: (pd14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe", "stm32f398",],),
             ]),
-            PD15: (pd15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], [
+            PD15: (pd15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], [
                 AF1: (into_af1, af1, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f302", "stm32f303", "stm32f373", "stm32f378", "stm32f358", "stm32f398",],),
@@ -1693,7 +1694,7 @@ gpio!([
         gpio_mapped_iorst: ioperst,
         partially_erased_pin: PEx,
         pins: [
-            PE0: (pe0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PE0: (pe0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF4: (into_af4, af4,),
@@ -1702,7 +1703,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE1: (pe1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PE1: (pe1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF1: (into_af1, af1,),
                 AF4: (into_af4, af4,),
                 AF7: (into_af7, af7,),
@@ -1710,7 +1711,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE2: (pe2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PE2: (pe2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1720,7 +1721,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE3: (pe3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [
+            PE3: (pe3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1730,7 +1731,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE4: (pe4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PE4: (pe4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1740,7 +1741,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE5: (pe5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [
+            PE5: (pe5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
@@ -1750,7 +1751,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE6: (pe6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PE6: (pe6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF0: (into_af0, af0,),
                 AF1: (into_af1, af1,),
             ], [
@@ -1758,52 +1759,52 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE7: (pe7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PE7: (pe7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE8: (pe8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [
+            PE8: (pe8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE9: (pe9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [
+            PE9: (pe9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE10: (pe10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PE10: (pe10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE11: (pe11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [
-                AF1: (into_af1, af1,),
-                AF2: (into_af2, af2,),
-            ], [
-                AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
-                AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
-            ]),
-            PE12: (pe12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [
+            PE11: (pe11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE13: (pe13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [
+            PE12: (pe12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE14: (pe14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [
+            PE13: (pe13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [
+                AF1: (into_af1, af1,),
+                AF2: (into_af2, af2,),
+            ], [
+                AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
+                AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
+            ]),
+            PE14: (pe14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF6: (into_af6, af6,),
@@ -1811,7 +1812,7 @@ gpio!([
                 AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PE15: (pe15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [
+            PE15: (pe15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF7: (into_af7, af7,),
@@ -1837,7 +1838,7 @@ gpio!([
         gpio_mapped_iorst: ioperst,
         partially_erased_pin: PEx,
         pins: [
-            PE0: (pe0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [], [
+            PE0: (pe0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f358", "stm32f398",],),
@@ -1845,14 +1846,14 @@ gpio!([
                 AF7: (into_af7, af7, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE1: (pe1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], [
+            PE1: (pe1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f358", "stm32f398",],),
                 AF6: (into_af6, af6, ["stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE2: (pe2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [], [
+            PE2: (pe2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [], [
                 AF0: (into_af0, af0, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
@@ -1861,7 +1862,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE3: (pe3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [], [
+            PE3: (pe3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [], [
                 AF0: (into_af0, af0, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
@@ -1870,7 +1871,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE4: (pe4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [], [
+            PE4: (pe4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [], [
                 AF0: (into_af0, af0, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
@@ -1879,7 +1880,7 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE5: (pe5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], [
+            PE5: (pe5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], [
                 AF0: (into_af0, af0, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
@@ -1888,59 +1889,59 @@ gpio!([
                 AF6: (into_af6, af6, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE6: (pe6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [], [
+            PE6: (pe6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [], [
                 AF0: (into_af0, af0, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f398",],),
                 AF6: (into_af6, af6, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE7: (pe7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [], [
+            PE7: (pe7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE8: (pe8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [], [
+            PE8: (pe8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE9: (pe9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], [
+            PE9: (pe9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE10: (pe10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [], [
+            PE10: (pe10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE11: (pe11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], [
-                AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
-                AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
-                AF5: (into_af5, af5, ["stm32f398",],),
-                AF12: (into_af12, af12, ["stm32f398",],),
-            ]),
-            PE12: (pe12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], [
+            PE11: (pe11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE13: (pe13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], [
+            PE12: (pe12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE14: (pe14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], [
+            PE13: (pe13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], [
+                AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
+                AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
+                AF5: (into_af5, af5, ["stm32f398",],),
+                AF12: (into_af12, af12, ["stm32f398",],),
+            ]),
+            PE14: (pe14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f398",],),
                 AF6: (into_af6, af6, ["stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PE15: (pe15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], [
+            PE15: (pe15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF7: (into_af7, af7, ["stm32f358", "stm32f373", "stm32f378", "stm32f398",],),
@@ -1960,12 +1961,12 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF4: (into_af4, af4,),
                 AF5: (into_af5, af5,),
                 AF6: (into_af6, af6,),
             ], []),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF4: (into_af4, af4,),
                 AF5: (into_af5, af5,),
             ], []),
@@ -1988,10 +1989,10 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF6: (into_af6, af6,),
             ], []),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], []),
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], []),
         ],
     },
     {
@@ -2006,29 +2007,29 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF4: (into_af4, af4,),
                 AF6: (into_af6, af6,),
             ], []),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF4: (into_af4, af4,),
             ], []),
-            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
             ], []),
-            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], []),
-            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], []),
-            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], []),
+            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF4: (into_af4, af4,),
                 AF7: (into_af7, af7,),
             ], []),
-            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], []),
-            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], []),
+            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF5: (into_af5, af5,),
@@ -2047,16 +2048,16 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF6: (into_af6, af6,),
             ], []),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], []),
-            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [], []),
-            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [], []),
-            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], []),
-            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [], []),
-            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], []),
-            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [], []),
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], []),
+            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [], []),
+            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [], []),
+            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], []),
+            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [], []),
+            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], []),
+            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [], []),
         ],
     },
     {
@@ -2074,35 +2075,35 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF4: (into_af4, af4,),
                 AF6: (into_af6, af6,),
             ], [
                 AF1: (into_af1, af1, ["stm32f303xd", "stm32f303xe",],),
                 AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF4: (into_af4, af4,),
             ], [
                 AF1: (into_af1, af1, ["stm32f303xd", "stm32f303xe",],),
                 AF5: (into_af5, af5, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
             ], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF3: (pf3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [], []),
-            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PF3: (pf3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [], []),
+            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
             ], [
                 AF3: (into_af3, af3, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], []),
-            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], []),
+            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF4: (into_af4, af4,),
@@ -2110,13 +2111,13 @@ gpio!([
             ], [
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF7: (pf7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [], []),
-            PF8: (pf8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [], []),
-            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], [
+            PF7: (pf7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [], []),
+            PF8: (pf8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [], []),
+            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], [
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF3: (into_af3, af3,),
                 AF5: (into_af5, af5,),
@@ -2124,11 +2125,11 @@ gpio!([
                 AF2: (into_af2, af2, ["stm32f303xd", "stm32f303xe",],),
                 AF12: (into_af12, af12, ["stm32f303xd", "stm32f303xe",],),
             ]),
-            PF11: (pf11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], []),
-            PF12: (pf12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], []),
-            PF13: (pf13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], []),
-            PF14: (pf14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], []),
-            PF15: (pf15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], []),
+            PF11: (pf11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], []),
+            PF12: (pf12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], []),
+            PF13: (pf13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], []),
+            PF14: (pf14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], []),
+            PF15: (pf15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], []),
         ],
     },
     {
@@ -2143,33 +2144,33 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF4: (into_af4, af4,),
             ], []),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF4: (into_af4, af4,),
             ], []),
-            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
                 AF4: (into_af4, af4,),
             ], []),
-            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF1: (into_af1, af1,),
             ], []),
-            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF4: (into_af4, af4,),
                 AF5: (into_af5, af5,),
                 AF7: (into_af7, af7,),
             ], []),
-            PF7: (pf7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PF7: (pf7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF4: (into_af4, af4,),
                 AF7: (into_af7, af7,),
             ], []),
-            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], []),
-            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], []),
+            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
             ], []),
         ],
@@ -2190,40 +2191,40 @@ gpio!([
         gpio_mapped_iorst: iopfrst,
         partially_erased_pin: PFx,
         pins: [
-            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [], [
+            PF0: (pf0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f318", "stm32f358", "stm32f378", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f318", "stm32f398",],),
                 AF6: (into_af6, af6, ["stm32f318", "stm32f328", "stm32f358", "stm32f398",],),
             ]),
-            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [], [
+            PF1: (pf1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f318", "stm32f358", "stm32f378", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f318", "stm32f398",],),
             ]),
-            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [], [
+            PF2: (pf2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f378",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF3: (pf3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [], [
+            PF3: (pf3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [], [
+            PF4: (pf4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [], [
+            PF5: (pf5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [], [
+            PF6: (pf6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f358", "stm32f378", "stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f358", "stm32f378", "stm32f398",],),
@@ -2231,52 +2232,52 @@ gpio!([
                 AF7: (into_af7, af7, ["stm32f358", "stm32f378", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF7: (pf7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [], [
+            PF7: (pf7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [], [
                 AF1: (into_af1, af1, ["stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF4: (into_af4, af4, ["stm32f378",],),
                 AF7: (into_af7, af7, ["stm32f378",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF8: (pf8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [], [
+            PF8: (pf8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [], [
+            PF9: (pf9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [], [
+            PF10: (pf10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [], [
                 AF1: (into_af1, af1, ["stm32f358", "stm32f378", "stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF3: (into_af3, af3, ["stm32f358", "stm32f398",],),
                 AF5: (into_af5, af5, ["stm32f358", "stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF11: (pf11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [], [
+            PF11: (pf11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
             ]),
-            PF12: (pf12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [], [
-                AF1: (into_af1, af1, ["stm32f398",],),
-                AF2: (into_af2, af2, ["stm32f398",],),
-                AF12: (into_af12, af12, ["stm32f398",],),
-            ]),
-            PF13: (pf13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [], [
+            PF12: (pf12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF14: (pf14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [], [
+            PF13: (pf13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
             ]),
-            PF15: (pf15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [], [
+            PF14: (pf14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [], [
+                AF1: (into_af1, af1, ["stm32f398",],),
+                AF2: (into_af2, af2, ["stm32f398",],),
+                AF12: (into_af12, af12, ["stm32f398",],),
+            ]),
+            PF15: (pf15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [], [
                 AF1: (into_af1, af1, ["stm32f398",],),
                 AF2: (into_af2, af2, ["stm32f398",],),
                 AF12: (into_af12, af12, ["stm32f398",],),
@@ -2296,72 +2297,72 @@ gpio!([
         gpio_mapped_iorst: iopgrst,
         partially_erased_pin: PGx,
         pins: [
-            PG0: (pg0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PG0: (pg0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG1: (pg1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PG1: (pg1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG2: (pg2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PG2: (pg2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG3: (pg3, 3, Input<Floating>, moder3, AFRL, afrl3, pupdr3, ot3, [
+            PG3: (pg3, 3, Input<Floating>, moder3, AFRL, afrl3, bs3, br3, odr3, idr3, pupdr3, ot3, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG4: (pg4, 4, Input<Floating>, moder4, AFRL, afrl4, pupdr4, ot4, [
+            PG4: (pg4, 4, Input<Floating>, moder4, AFRL, afrl4, bs4, br4, odr4, idr4, pupdr4, ot4, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG5: (pg5, 5, Input<Floating>, moder5, AFRL, afrl5, pupdr5, ot5, [
+            PG5: (pg5, 5, Input<Floating>, moder5, AFRL, afrl5, bs5, br5, odr5, idr5, pupdr5, ot5, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG6: (pg6, 6, Input<Floating>, moder6, AFRL, afrl6, pupdr6, ot6, [
+            PG6: (pg6, 6, Input<Floating>, moder6, AFRL, afrl6, bs6, br6, odr6, idr6, pupdr6, ot6, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG7: (pg7, 7, Input<Floating>, moder7, AFRL, afrl7, pupdr7, ot7, [
+            PG7: (pg7, 7, Input<Floating>, moder7, AFRL, afrl7, bs7, br7, odr7, idr7, pupdr7, ot7, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG8: (pg8, 8, Input<Floating>, moder8, AFRH, afrh8, pupdr8, ot8, [
+            PG8: (pg8, 8, Input<Floating>, moder8, AFRH, afrh8, bs8, br8, odr8, idr8, pupdr8, ot8, [
                 AF1: (into_af1, af1,),
             ], []),
-            PG9: (pg9, 9, Input<Floating>, moder9, AFRH, afrh9, pupdr9, ot9, [
-                AF1: (into_af1, af1,),
-                AF12: (into_af12, af12,),
-            ], []),
-            PG10: (pg10, 10, Input<Floating>, moder10, AFRH, afrh10, pupdr10, ot10, [
+            PG9: (pg9, 9, Input<Floating>, moder9, AFRH, afrh9, bs9, br9, odr9, idr9, pupdr9, ot9, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG11: (pg11, 11, Input<Floating>, moder11, AFRH, afrh11, pupdr11, ot11, [
+            PG10: (pg10, 10, Input<Floating>, moder10, AFRH, afrh10, bs10, br10, odr10, idr10, pupdr10, ot10, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG12: (pg12, 12, Input<Floating>, moder12, AFRH, afrh12, pupdr12, ot12, [
+            PG11: (pg11, 11, Input<Floating>, moder11, AFRH, afrh11, bs11, br11, odr11, idr11, pupdr11, ot11, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG13: (pg13, 13, Input<Floating>, moder13, AFRH, afrh13, pupdr13, ot13, [
+            PG12: (pg12, 12, Input<Floating>, moder12, AFRH, afrh12, bs12, br12, odr12, idr12, pupdr12, ot12, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG14: (pg14, 14, Input<Floating>, moder14, AFRH, afrh14, pupdr14, ot14, [
+            PG13: (pg13, 13, Input<Floating>, moder13, AFRH, afrh13, bs13, br13, odr13, idr13, pupdr13, ot13, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
-            PG15: (pg15, 15, Input<Floating>, moder15, AFRH, afrh15, pupdr15, ot15, [
+            PG14: (pg14, 14, Input<Floating>, moder14, AFRH, afrh14, bs14, br14, odr14, idr14, pupdr14, ot14, [
+                AF1: (into_af1, af1,),
+                AF12: (into_af12, af12,),
+            ], []),
+            PG15: (pg15, 15, Input<Floating>, moder15, AFRH, afrh15, bs15, br15, odr15, idr15, pupdr15, ot15, [
                 AF1: (into_af1, af1,),
             ], []),
         ],
@@ -2379,17 +2380,17 @@ gpio!([
         gpio_mapped_iorst: iophrst,
         partially_erased_pin: PHx,
         pins: [
-            PH0: (ph0, 0, Input<Floating>, moder0, AFRL, afrl0, pupdr0, ot0, [
+            PH0: (ph0, 0, Input<Floating>, moder0, AFRL, afrl0, bs0, br0, odr0, idr0, pupdr0, ot0, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PH1: (ph1, 1, Input<Floating>, moder1, AFRL, afrl1, pupdr1, ot1, [
+            PH1: (ph1, 1, Input<Floating>, moder1, AFRL, afrl1, bs1, br1, odr1, idr1, pupdr1, ot1, [
                 AF1: (into_af1, af1,),
                 AF2: (into_af2, af2,),
                 AF12: (into_af12, af12,),
             ], []),
-            PH2: (ph2, 2, Input<Floating>, moder2, AFRL, afrl2, pupdr2, ot2, [
+            PH2: (ph2, 2, Input<Floating>, moder2, AFRL, afrl2, bs2, br2, odr2, idr2, pupdr2, ot2, [
                 AF1: (into_af1, af1,),
                 AF12: (into_af12, af12,),
             ], []),
