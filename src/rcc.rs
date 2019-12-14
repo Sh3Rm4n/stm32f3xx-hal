@@ -103,7 +103,7 @@ mod usb_clocking {
         false
     }
 
-    pub fn set_usbpre<W>(w: &mut W, _: bool) -> &mut W {
+    pub fn set_usbpre<W>(w: &mut W, _: rcc::cfgr::USBPRE_A) -> &mut W {
         w
     }
 }
@@ -125,8 +125,11 @@ mod usb_clocking {
         true
     }
 
-    pub fn set_usbpre(w: &mut rcc::cfgr::W, bit: bool) -> &mut rcc::cfgr::W {
-        w.usbpre().bit(bit)
+    pub fn set_usbpre(
+        w: &mut rcc::cfgr::W,
+        usb_prescale: rcc::cfgr::USBPRE_A,
+    ) -> &mut rcc::cfgr::W {
+        w.usbpre().variant(usb_prescale)
     }
 }
 
@@ -321,9 +324,9 @@ impl CFGR {
         // usbpre == false: divide clock by 1.5, otherwise no division
         let usb_ok = has_usb() && self.hse.is_some() && pll_options.is_some();
         let (usbpre, usbclk_valid) = match (usb_ok, sysclk) {
-            (true, 72_000_000) => (false, true),
-            (true, 48_000_000) => (true, true),
-            _ => (true, false),
+            (true, 72_000_000) => (rcc::cfgr::USBPRE_A::DIV1_5, true),
+            (true, 48_000_000) => (rcc::cfgr::USBPRE_A::DIV1, true),
+            _ => (rcc::cfgr::USBPRE_A::DIV1, false),
         };
 
         let rcc = unsafe { &*RCC::ptr() };
@@ -354,20 +357,16 @@ impl CFGR {
                 .ppre1()
                 .bits(ppre1_bits)
                 .hpre()
-                .bits(hpre_bits)
-                .sw()
-                .bits(if pll_options.is_some() {
-                    // PLL
-                    0b10
-                } else if self.hse.is_some() {
-                    // HSE
-                    0b01
-                } else {
-                    // HSI
-                    0b00
-                })
-        });
+                .bits(hpre_bits);
 
+            if pll_options.is_some() {
+                w.sw().pll()
+            } else if self.hse.is_some() {
+                w.sw().hse()
+            } else {
+                w.sw().hsi()
+            }
+        });
 
         Clocks {
             hclk: Hertz(hclk),
@@ -379,8 +378,6 @@ impl CFGR {
             usbclk_valid,
         }
     }
-
-
 }
 
 /// Frozen clock frequencies
