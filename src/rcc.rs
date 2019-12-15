@@ -234,74 +234,95 @@ impl CFGR {
     }
 
     /// Returns a tuple containing the effective sysclk rate and optional pll settings.
-    fn calc_sysclk(&self) -> (u32, Option<(u8, rcc::cfgr::PLLSRC_A)>) {
+    fn calc_sysclk(&self) -> (u32, Option<(rcc::cfgr::PLLMUL_A, rcc::cfgr::PLLSRC_A)>) {
         let (pllsrcclk, pllmul, pllsrc) = self.calc_pll();
         if pllmul == 1 {
             return (pllsrcclk, None);
         }
 
         let pllmul = cmp::min(cmp::max(pllmul, 2), 16);
-        let sysclk = pllmul * pllsrcclk;
+        let sysclk = pllsrcclk * pllmul;
         assert!(sysclk <= 72_000_000);
 
-        let pllmul_bits = pllmul as u8 - 2;
-        (sysclk, Some((pllmul_bits, pllsrc)))
+        // NOTE From<u8> for PLLMUL_A is not implemented
+        // https://docs.rs/stm32f3/0.9.0/src/stm32f3/stm32f303/rcc/cfgr.rs.html#629-662
+        // let pllmul_mul: rcc::cfgr::PLLMUL_A = (pllmul as u8 - 2).into();
+        let pllmul_mul = match pllmul as u8 {
+            2 => rcc::cfgr::PLLMUL_A::MUL2,
+            3 => rcc::cfgr::PLLMUL_A::MUL3,
+            4 => rcc::cfgr::PLLMUL_A::MUL4,
+            5 => rcc::cfgr::PLLMUL_A::MUL5,
+            6 => rcc::cfgr::PLLMUL_A::MUL6,
+            7 => rcc::cfgr::PLLMUL_A::MUL7,
+            8 => rcc::cfgr::PLLMUL_A::MUL8,
+            9 => rcc::cfgr::PLLMUL_A::MUL9,
+            10 => rcc::cfgr::PLLMUL_A::MUL10,
+            11 => rcc::cfgr::PLLMUL_A::MUL11,
+            12 => rcc::cfgr::PLLMUL_A::MUL12,
+            13 => rcc::cfgr::PLLMUL_A::MUL13,
+            14 => rcc::cfgr::PLLMUL_A::MUL14,
+            15 => rcc::cfgr::PLLMUL_A::MUL15,
+            16 => rcc::cfgr::PLLMUL_A::MUL16,
+            17 => rcc::cfgr::PLLMUL_A::MUL16X,
+            _ => unreachable!(),
+        };
+        (sysclk, Some((pllmul_mul, pllsrc)))
     }
 
     /// Freezes the clock configuration, making it effective
     pub fn freeze(self, acr: &mut ACR) -> Clocks {
         let (sysclk, pll_options) = self.calc_sysclk();
 
-        let hpre_bits = self
+        let hpre_div = self
             .hclk
             .map(|hclk| match sysclk / hclk {
                 0 => unreachable!(),
-                1 => 0b0111,
-                2 => 0b1000,
-                3..=5 => 0b1001,
-                6..=11 => 0b1010,
-                12..=39 => 0b1011,
-                40..=95 => 0b1100,
-                96..=191 => 0b1101,
-                192..=383 => 0b1110,
-                _ => 0b1111,
+                1 => rcc::cfgr::HPRE_A::DIV1,
+                2 => rcc::cfgr::HPRE_A::DIV2,
+                3..=5 => rcc::cfgr::HPRE_A::DIV4,
+                6..=11 => rcc::cfgr::HPRE_A::DIV8,
+                12..=39 => rcc::cfgr::HPRE_A::DIV16,
+                40..=95 => rcc::cfgr::HPRE_A::DIV64,
+                96..=191 => rcc::cfgr::HPRE_A::DIV128,
+                192..=383 => rcc::cfgr::HPRE_A::DIV256,
+                _ => rcc::cfgr::HPRE_A::DIV512,
             })
-            .unwrap_or(0b0111);
+            .unwrap_or(rcc::cfgr::HPRE_A::DIV1);
 
-        let hclk = sysclk / (1 << (hpre_bits - 0b0111));
+        let hclk = sysclk / (1 << (hpre_div as u32));
 
         assert!(hclk <= 72_000_000);
 
-        let ppre1_bits = self
+        let ppre1_div = self
             .pclk1
             .map(|pclk1| match hclk / pclk1 {
                 0 => unreachable!(),
-                1 => 0b011,
-                2 => 0b100,
-                3..=5 => 0b101,
-                6..=11 => 0b110,
-                _ => 0b111,
+                1 => rcc::cfgr::PPRE1_A::DIV1,
+                2 => rcc::cfgr::PPRE1_A::DIV2,
+                3..=5 => rcc::cfgr::PPRE1_A::DIV4,
+                6..=11 => rcc::cfgr::PPRE1_A::DIV8,
+                _ => rcc::cfgr::PPRE1_A::DIV16,
             })
-            .unwrap_or(0b011);
+            .unwrap_or(rcc::cfgr::PPRE1_A::DIV1);
 
-        let ppre1 = 1 << (ppre1_bits - 0b011);
+        let ppre1 = 1 << (ppre1_div as u8);
         let pclk1 = hclk / u32(ppre1);
 
         assert!(pclk1 <= 36_000_000);
 
-        let ppre2_bits = self
+        let ppre2_div = self
             .pclk2
             .map(|pclk2| match hclk / pclk2 {
                 0 => unreachable!(),
-                1 => 0b011,
-                2 => 0b100,
-                3..=5 => 0b101,
-                6..=11 => 0b110,
-                _ => 0b111,
+                1 => rcc::cfgr::PPRE2_A::DIV1,
+                2 => rcc::cfgr::PPRE2_A::DIV2,
+                3..=5 => rcc::cfgr::PPRE2_A::DIV4,
+                6..=11 => rcc::cfgr::PPRE2_A::DIV8,
+                _ => rcc::cfgr::PPRE2_A::DIV16,
             })
-            .unwrap_or(0b011);
+            .unwrap_or(rcc::cfgr::PPRE2_A::DIV1);
 
-        let ppre2 = 1 << (ppre2_bits - 0b011);
+        let ppre2 = 1 << (ppre2_div as u8);
         let pclk2 = hclk / u32(ppre2);
 
         assert!(pclk2 <= 72_000_000);
@@ -333,31 +354,30 @@ impl CFGR {
 
         if self.hse.is_some() {
             // enable HSE and wait for it to be ready
+            rcc.cr.modify(|_, w| w.hseon().on());
 
-            rcc.cr.modify(|_, w| w.hseon().set_bit());
-
-            while rcc.cr.read().hserdy().bit_is_clear() {}
+            while rcc.cr.read().hserdy().is_not_ready() {}
         }
 
-        if let Some((pllmul_bits, pllsrc)) = pll_options {
+        if let Some((pllmul_mul, pllsrc)) = pll_options {
             // enable PLL and wait for it to be ready
             rcc.cfgr
-                .modify(|_, w| w.pllmul().bits(pllmul_bits).pllsrc().variant(pllsrc));
+                .modify(|_, w| w.pllmul().variant(pllmul_mul).pllsrc().variant(pllsrc));
 
-            rcc.cr.modify(|_, w| w.pllon().set_bit());
+            rcc.cr.modify(|_, w| w.pllon().on());
 
-            while rcc.cr.read().pllrdy().bit_is_clear() {}
+            while rcc.cr.read().pllrdy().is_not_ready() {}
         }
 
         // set prescalers and clock source
-        rcc.cfgr.modify(|_, w| unsafe {
+        rcc.cfgr.modify(|_, w| {
             set_usbpre(w, usbpre)
                 .ppre2()
-                .bits(ppre2_bits)
+                .variant(ppre2_div)
                 .ppre1()
-                .bits(ppre1_bits)
+                .variant(ppre1_div)
                 .hpre()
-                .bits(hpre_bits);
+                .variant(hpre_div);
 
             if pll_options.is_some() {
                 w.sw().pll()
