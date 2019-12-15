@@ -440,13 +440,12 @@ macro_rules! pwm_timer_private {
             // Justification: It is safe because only scopes with mutable references
             // to TIMx should ever modify this bit.
             unsafe {
-                (*RCC::ptr()).$apbxenr.modify(|_, w| w.$timxen().set_bit());
-                (*RCC::ptr()).$apbxrstr.modify(|_, w| w.$timxrst().set_bit());
-                (*RCC::ptr()).$apbxrstr.modify(|_, w| w.$timxrst().clear_bit());
+                (*RCC::ptr()).$apbxenr.modify(|_, w| w.$timxen().enabled());
+                (*RCC::ptr()).$apbxrstr.modify(|_, w| w.$timxrst().reset());
             }
 
             // enable auto reload preloader
-            tim.cr1.write(|w| w.arpe().set_bit());
+            tim.cr1.write(|w| w.arpe().enabled());
 
             // Set the "resolution" of the duty cycle (ticks before restarting at 0)
             // Oddly this is unsafe for some timers and not others
@@ -464,13 +463,13 @@ macro_rules! pwm_timer_private {
             tim.psc.write(|w| w.psc().bits(prescale_factor as u16 - 1));
 
             // Make the settings reload immediately
-            tim.egr.write(|w| w.ug().set_bit());
+            tim.egr.write(|w| w.ug().update());
 
             // Enable outputs (STM32 Break Timer Specific)
             $enable_break_timer(&tim);
 
             // Enable the Timer
-            tim.cr1.modify(|_, w| w.cen().set_bit());
+            tim.cr1.modify(|_, w| w.cen().enabled());
 
             // TODO: Passing in the constructor is a bit silly,
             // is there an alternative approach to get this to repeat,
@@ -509,6 +508,8 @@ macro_rules! pwm_timer_with_break {
             $pclkz,
             $timxrst,
             $timxen,
+            // TODO
+            // |tim: &$TIMx| tim.bdtr.write(|w| w.moe().enabled()),
             |tim: &$TIMx| tim.bdtr.write(|w| w.moe().set_bit()),
             [$($TIMx_CHy),+],
             [$($x),+]
@@ -525,15 +526,20 @@ macro_rules! pwm_channel_pin {
             ///
             /// The pin is consumed and cannot be returned.
             pub fn $output_to_pzx(self, _p: $Pzi<$AFj>) -> PwmChannel<$TIMx_CHy, $resulting_state> {
+                // FIXME not working for tim15 tim16 and tim17 (stm32f303)
                 unsafe {
                     (*$TIMx::ptr()).$ccmrz_output().modify(|_, w| {
                         w
                             // Select PWM Mode 1 for CHy
                             .$ocym()
+                            // TODO
+                            // .pwm_mode1()
                             .bits(0b0110)
                             // set pre-load enable so that updates to the duty cycle
                             // propagate but _not_ in the middle of a cycle.
                             .$ocype()
+                            // TODO
+                            // .enabled()
                             .set_bit()
                     });
                 }
