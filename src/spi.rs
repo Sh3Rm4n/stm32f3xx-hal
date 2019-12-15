@@ -133,15 +133,14 @@ macro_rules! hal {
                     MOSI: MosiPin<$SPIX>,
                 {
                     // enable or reset $SPIX
-                    apb2.enr().modify(|_, w| w.$spiXen().set_bit());
-                    apb2.rstr().modify(|_, w| w.$spiXrst().set_bit());
-                    apb2.rstr().modify(|_, w| w.$spiXrst().clear_bit());
+                    apb2.enr().modify(|_, w| w.$spiXen().enabled());
+                    apb2.rstr().modify(|_, w| w.$spiXrst().reset());
 
                     // FRXTH: RXNE event is generated if the FIFO level is greater than or equal to
                     //        8-bit
                     // DS: 8-bit data size
                     // SSOE: Slave Select output disabled
-                    spi.cr2.write(|w| w.frxth().set_bit().ds().eight_bit().ssoe().clear_bit());
+                    spi.cr2.write(|w| w.frxth().quarter().ds().eight_bit().ssoe().disabled());
 
                     // CPHA: phase
                     // CPOL: polarity
@@ -154,12 +153,17 @@ macro_rules! hal {
                     // CRCEN: hardware CRC calculation disabled
                     // BIDIMODE: 2 line unidirectional (full duplex)
                     spi.cr1.write(|w| {
-                        w.cpha()
-                            .bit(mode.phase == Phase::CaptureOnSecondTransition)
-                            .cpol()
-                            .bit(mode.polarity == Polarity::IdleHigh)
-                            .mstr()
-                            .set_bit();
+                        w.mstr().master();
+
+                        match mode.phase {
+                            Phase::CaptureOnFirstTransition => w.cpha().first_edge(),
+                            Phase::CaptureOnSecondTransition => w.cpha().second_edge(),
+                        };
+
+                        match mode.polarity {
+                            Polarity::IdleLow => w.cpol().idle_low(),
+                            Polarity::IdleHigh => w.cpol().idle_high(),
+                        };
 
                         match clocks.$pclkX().0 / freq.into().0 {
                             0 => unreachable!(),
@@ -174,17 +178,17 @@ macro_rules! hal {
                         };
 
                         w.spe()
-                            .set_bit()
+                            .enabled()
                             .lsbfirst()
-                            .clear_bit()
+                            .lsbfirst()
                             .ssi()
-                            .set_bit()
+                            .slave_not_selected()
                             .ssm()
-                            .set_bit()
+                            .enabled()
                             .crcen()
-                            .clear_bit()
+                            .disabled()
                             .bidimode()
-                            .clear_bit()
+                            .unidirectional()
                     });
 
                     Spi { spi, pins }
@@ -202,13 +206,13 @@ macro_rules! hal {
                 fn read(&mut self) -> nb::Result<u8, Error> {
                     let sr = self.spi.sr.read();
 
-                    Err(if sr.ovr().bit_is_set() {
+                    Err(if sr.ovr().is_overrun() {
                         nb::Error::Other(Error::Overrun)
-                    } else if sr.modf().bit_is_set() {
+                    } else if sr.modf().is_fault() {
                         nb::Error::Other(Error::ModeFault)
-                    } else if sr.crcerr().bit_is_set() {
+                    } else if sr.crcerr().is_no_match() {
                         nb::Error::Other(Error::Crc)
-                    } else if sr.rxne().bit_is_set() {
+                    } else if sr.rxne().is_not_empty() {
                         // NOTE(read_volatile) read only 1 byte (the svd2rust API only allows
                         // reading a half-word)
                         return Ok(unsafe {
@@ -222,13 +226,13 @@ macro_rules! hal {
                 fn send(&mut self, byte: u8) -> nb::Result<(), Error> {
                     let sr = self.spi.sr.read();
 
-                    Err(if sr.ovr().bit_is_set() {
+                    Err(if sr.ovr().is_overrun() {
                         nb::Error::Other(Error::Overrun)
-                    } else if sr.modf().bit_is_set() {
+                    } else if sr.modf().is_fault() {
                         nb::Error::Other(Error::ModeFault)
-                    } else if sr.crcerr().bit_is_set() {
+                    } else if sr.crcerr().is_no_match() {
                         nb::Error::Other(Error::Crc)
-                    } else if sr.txe().bit_is_set() {
+                    } else if sr.txe().is_empty() {
                         // NOTE(write_volatile) see note above
                         unsafe { ptr::write_volatile(&self.spi.dr as *const _ as *mut u8, byte) }
                         return Ok(());
