@@ -99,11 +99,17 @@ const HSI: u32 = 8_000_000; // Hz
 // some microcontrollers do not have USB
 #[cfg(any(feature = "stm32f301", feature = "stm32f334",))]
 mod usb_clocking {
-    pub fn has_usb() -> bool {
-        false
+    use crate::stm32::rcc;
+
+    pub fn is_valid(
+        _sysclk: &u32,
+        _hse: &Option<u32>,
+        _pll_options: &Option<(rcc::cfgr::PLLMUL_A, rcc::cfgr::PLLSRC_A)>,
+    ) -> (bool, bool) {
+        (false, false)
     }
 
-    pub fn set_usbpre<W>(w: &mut W, _: rcc::cfgr::USBPRE_A) -> &mut W {
+    pub fn set_usbpre<W>(w: &mut W, _: bool) -> &mut W {
         w
     }
 }
@@ -121,8 +127,20 @@ mod usb_clocking {
 mod usb_clocking {
     use crate::stm32::rcc;
 
-    pub fn has_usb() -> bool {
-        true
+    pub fn is_valid(
+        sysclk: &u32,
+        hse: &Option<u32>,
+        pll_options: &Option<(rcc::cfgr::PLLMUL_A, rcc::cfgr::PLLSRC_A)>,
+    ) -> (rcc::cfgr::USBPRE_A, bool) {
+        // the USB clock is only valid if an external crystal is used, the PLL is enabled, and the
+        // PLL output frequency is a supported one.
+        // usbpre == false: divide clock by 1.5, otherwise no division
+        let usb_ok = hse.is_some() && pll_options.is_some();
+        match (usb_ok, sysclk) {
+            (true, 72_000_000) => (rcc::cfgr::USBPRE_A::DIV1_5, true),
+            (true, 48_000_000) => (rcc::cfgr::USBPRE_A::DIV1, true),
+            _ => (rcc::cfgr::USBPRE_A::DIV1, false),
+        }
     }
 
     pub fn set_usbpre(
@@ -132,8 +150,6 @@ mod usb_clocking {
         w.usbpre().variant(usb_prescale)
     }
 }
-
-use self::usb_clocking::{has_usb, set_usbpre};
 
 /// Clock configuration
 pub struct CFGR {
@@ -269,6 +285,7 @@ impl CFGR {
         (sysclk, Some((pllmul_mul, pllsrc)))
     }
 
+    // TODO
     /// Freezes the clock configuration, making it effective
     pub fn freeze(self, acr: &mut ACR) -> Clocks {
         let (sysclk, pll_options) = self.calc_sysclk();
@@ -343,15 +360,7 @@ impl CFGR {
             })
         }
 
-        // the USB clock is only valid if an external crystal is used, the PLL is enabled, and the
-        // PLL output frequency is a supported one.
-        // usbpre == false: divide clock by 1.5, otherwise no division
-        let usb_ok = has_usb() && self.hse.is_some() && pll_options.is_some();
-        let (usbpre, usbclk_valid) = match (usb_ok, sysclk) {
-            (true, 72_000_000) => (rcc::cfgr::USBPRE_A::DIV1_5, true),
-            (true, 48_000_000) => (rcc::cfgr::USBPRE_A::DIV1, true),
-            _ => (rcc::cfgr::USBPRE_A::DIV1, false),
-        };
+        let (usbpre, usbclk_valid) = usb_clocking::is_valid(&sysclk, &self.hse, &pll_options);
 
         let rcc = unsafe { &*RCC::ptr() };
 
@@ -374,8 +383,9 @@ impl CFGR {
 
         // set prescalers and clock source
         rcc.cfgr.modify(|_, w| {
-            set_usbpre(w, usbpre)
-                .ppre2()
+            usb_clocking::set_usbpre(w, usbpre);
+
+            w.ppre2()
                 .variant(ppre2_div)
                 .ppre1()
                 .variant(ppre1_div)
