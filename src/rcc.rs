@@ -289,6 +289,7 @@ impl CFGR {
             })
             .unwrap_or(rcc::cfgr::HPRE_A::DIV1);
 
+        // TODO is this casting safe?
         let hclk = sysclk / (1 << (hpre_div as u32));
 
         assert!(hclk <= 72_000_000);
@@ -305,6 +306,7 @@ impl CFGR {
             })
             .unwrap_or(rcc::cfgr::PPRE1_A::DIV1);
 
+        // TODO is this casting safe?
         let ppre1 = 1 << (ppre1_div as u8);
         let pclk1 = hclk / u32(ppre1);
 
@@ -322,6 +324,7 @@ impl CFGR {
             })
             .unwrap_or(rcc::cfgr::PPRE2_A::DIV1);
 
+        // TODO is this casting safe?
         let ppre2 = 1 << (ppre2_div as u8);
         let pclk2 = hclk / u32(ppre2);
 
