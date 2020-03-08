@@ -215,7 +215,7 @@ impl CFGR {
         feature = "stm32f398",
     ))]
     fn calc_pll(&self) -> (u32, u32, rcc::cfgr::PLLSRC_A) {
-        let mut pllsrcclk = self.hse.unwrap_or(HSI / 2);
+        let mut pllsrcclk = self.hse.unwrap_or(HSI);
         let mut pllmul = self.sysclk.unwrap_or(pllsrcclk) / pllsrcclk;
 
         let pllsrc = if self.hse.is_some() {

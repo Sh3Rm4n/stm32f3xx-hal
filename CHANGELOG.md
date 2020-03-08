@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - Bump `stm32f3` dependency to `0.10.0` ([#42](https://github.com/stm32-rs/stm32f3xx-hal/pull/42))
+- `PLL` was calculated wrong for devices, which to not divide `HSI`
 
 ## [v0.4.1] - 2020-03-07
 
