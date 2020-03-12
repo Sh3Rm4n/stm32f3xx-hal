@@ -190,7 +190,8 @@ impl CFGR {
 
     /// Returns a tuple of the (pllsrclk frequency, pllmul, and pllsrc).
     #[cfg(not(any(
-        feature = "stm32f302",
+        feature = "stm32f302xd",
+        feature = "stm32f302xe",
         feature = "stm32f303xd",
         feature = "stm32f303xe",
         feature = "stm32f398"
@@ -209,7 +210,8 @@ impl CFGR {
 
     /// Returns a tuple of the (pllsrclk frequency, pllmul, and pllsrc).
     #[cfg(any(
-        feature = "stm32f302",
+        feature = "stm32f302xd",
+        feature = "stm32f302xe",
         feature = "stm32f303xd",
         feature = "stm32f303xe",
         feature = "stm32f398",
