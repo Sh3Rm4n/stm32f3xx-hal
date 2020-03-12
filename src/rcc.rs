@@ -226,9 +226,7 @@ impl CFGR {
             pllmul /= 2;
             pllsrcclk *= 2;
             rcc::cfgr::PLLSRC_A::HSI_DIV_PREDIV
-        } else {
-            rcc::cfgr::PLLSRC_A::HSI_DIV2
-        };
+        }
         (pllsrcclk, pllmul, pllsrc)
     }
 
