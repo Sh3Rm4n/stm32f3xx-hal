@@ -199,6 +199,7 @@ impl CFGR {
     fn calc_pll(&self) -> (u32, u32, rcc::cfgr::PLLSRC_A) {
         let pllsrcclk = self.hse.unwrap_or(HSI / 2);
         let pllmul = self.sysclk.unwrap_or(pllsrcclk) / pllsrcclk;
+        assert!(pllmul > 16);
 
         let pllsrc = if self.hse.is_some() {
             rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
@@ -217,16 +218,24 @@ impl CFGR {
         feature = "stm32f398",
     ))]
     fn calc_pll(&self) -> (u32, u32, rcc::cfgr::PLLSRC_A) {
+        // TODO Remove /2 is a none issue because /2 is done after that
         let mut pllsrcclk = self.hse.unwrap_or(HSI);
+        // FIXME Handle the PREDIV -> PLLMUL
+        // BUT THIS IS **NOT** THE CASE FOR stm32f302
+        // WHERE IS THIS SET???
+        // In the case of stm32f303 which does have prediv before pll_mul,
+        // either use pllmul if sysclk is greater than pllsrclck
+        // or use prediv is sysclk is lower than pllsrclock
         let mut pllmul = self.sysclk.unwrap_or(pllsrcclk) / pllsrcclk;
+        // TODO think about error handling? shoudl we assert in any invalid case for every
+        // different family member of stm32f3xx?
+        assert!(pllmul > 16);
 
         let pllsrc = if self.hse.is_some() {
             rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
-        } else if pllmul > 16 {
-            pllmul /= 2;
-            pllsrcclk *= 2;
+        } else {
             rcc::cfgr::PLLSRC_A::HSI_DIV_PREDIV
-        }
+        };
         (pllsrcclk, pllmul, pllsrc)
     }
 
@@ -237,7 +246,6 @@ impl CFGR {
             return (pllsrcclk, None);
         }
 
-        let pllmul = cmp::min(cmp::max(pllmul, 2), 16);
         let sysclk = pllmul * pllsrcclk;
         assert!(sysclk <= 72_000_000);
 
