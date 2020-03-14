@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Now system clocks  lower than HSI (internal 8 Mhz oscillator) or HSE (external
+  oscillator) are supported.
+
 ### Fixed
 
 - Wrong frequency reported by `MonoTimer` ([#56](https://github.com/stm32-rs/stm32f3xx-hal/pull/56))
