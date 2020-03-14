@@ -143,12 +143,12 @@ pub struct CFGR {
 
 enum PllArithmetic {
     MUL(rcc::cfgr::PLLMUL_A),
-    DIV(rcc::cfgr2::PLLNODIV_A),
+    DIV(rcc::cfgr2::PREDIV_A),
 }
 
 struct PllOptions {
     src: rcc::cfgr::PLLSRC_A,
-    arithmetic: Option<PllMulDiv>,
+    arithmetic: Option<PllArithmetic>,
 }
 
 impl CFGR {
@@ -234,7 +234,7 @@ impl CFGR {
         let hclk = self.hse.unwrap_or(HSI);
 
         // Set pll muliplicator or divisor according to sysclk
-         let (pll_mul, pll_div): (Option<u32>, Option<u32>) = let Some(sysclk) = self.sysclk {
+         let (pll_mul, pll_div): (Option<u32>, Option<u32>) = if let Some(sysclk) = self.sysclk {
             // Use the multiplicator to make sysclk faster than pllsrcclk
             if sysclk > hclk {
                 (Some(sysclk / hclk), None)
@@ -246,12 +246,16 @@ impl CFGR {
             } else {
                 (None, None)
             }
+        } else {
+            (None, None)
         };
 
+        // Select hardware clock source of the PLL
         let pll_src = if self.hse.is_some() {
             rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
         }
         else {
+            // default to sysclk = hclk
             if pll_mul.is_none() && pll_div.is_none() {
                 // PLLMUL is multiplicating with 2 by default.
                 // Enable the HSI_DIV2 source, which forces PREDIV to be dividing by 2.
@@ -261,61 +265,60 @@ impl CFGR {
             }
         };
 
+
+        let pll_arithmetic = if let Some(mul) = pll_mul {
+            Some(PllArithmetic::MUL(
+                match mul as u8 {
+                    2 => rcc::cfgr::PLLMUL_A::MUL2,
+                    3 => rcc::cfgr::PLLMUL_A::MUL3,
+                    4 => rcc::cfgr::PLLMUL_A::MUL4,
+                    5 => rcc::cfgr::PLLMUL_A::MUL5,
+                    6 => rcc::cfgr::PLLMUL_A::MUL6,
+                    7 => rcc::cfgr::PLLMUL_A::MUL7,
+                    8 => rcc::cfgr::PLLMUL_A::MUL8,
+                    9 => rcc::cfgr::PLLMUL_A::MUL9,
+                    10 => rcc::cfgr::PLLMUL_A::MUL10,
+                    11 => rcc::cfgr::PLLMUL_A::MUL11,
+                    12 => rcc::cfgr::PLLMUL_A::MUL12,
+                    13 => rcc::cfgr::PLLMUL_A::MUL13,
+                    14 => rcc::cfgr::PLLMUL_A::MUL14,
+                    15 => rcc::cfgr::PLLMUL_A::MUL15,
+                    16 => rcc::cfgr::PLLMUL_A::MUL16,
+                    17 => rcc::cfgr::PLLMUL_A::MUL16X,
+                    _ => unreachable!(),
+                }
+            ))
+        } else if let Some(div) = pll_div {
+            Some(PllArithmetic::DIV(
+                match div as u8 {
+                    1 => rcc::cfgr2::PREDIV_A::DIV1,
+                    2 => rcc::cfgr2::PREDIV_A::DIV2,
+                    3 => rcc::cfgr2::PREDIV_A::DIV3,
+                    4 => rcc::cfgr2::PREDIV_A::DIV4,
+                    5 => rcc::cfgr2::PREDIV_A::DIV5,
+                    6 => rcc::cfgr2::PREDIV_A::DIV6,
+                    7 => rcc::cfgr2::PREDIV_A::DIV7,
+                    8 => rcc::cfgr2::PREDIV_A::DIV8,
+                    9 => rcc::cfgr2::PREDIV_A::DIV9,
+                    10 => rcc::cfgr2::PREDIV_A::DIV10,
+                    11 => rcc::cfgr2::PREDIV_A::DIV11,
+                    12 => rcc::cfgr2::PREDIV_A::DIV12,
+                    13 => rcc::cfgr2::PREDIV_A::DIV13,
+                    14 => rcc::cfgr2::PREDIV_A::DIV14,
+                    15 => rcc::cfgr2::PREDIV_A::DIV15,
+                    16 => rcc::cfgr2::PREDIV_A::DIV16,
+                    _ => unreachable!(),
+                }
+            ))
+        } else {
+            // No division or multiplication
+            None
+        };
+
         let sysclk = (hclk / pll_div.unwrap_or(1)) * pll_mul.unwrap_or(1);
         assert!(sysclk <= 72_000_000);
 
-        //
-        let pll_arithmetic = if pll_src == rcc::cfgr::PLLSRC_A::HSI_DIV2 {
-            None
-        } else {
-            if pll_mul.is_some() {
-                Some(PllArithmetic::MUL(
-                    match pll_mul as u8 {
-                        2 => rcc::cfgr::PLLMUL_A::MUL2,
-                        3 => rcc::cfgr::PLLMUL_A::MUL3,
-                        4 => rcc::cfgr::PLLMUL_A::MUL4,
-                        5 => rcc::cfgr::PLLMUL_A::MUL5,
-                        6 => rcc::cfgr::PLLMUL_A::MUL6,
-                        7 => rcc::cfgr::PLLMUL_A::MUL7,
-                        8 => rcc::cfgr::PLLMUL_A::MUL8,
-                        9 => rcc::cfgr::PLLMUL_A::MUL9,
-                        10 => rcc::cfgr::PLLMUL_A::MUL10,
-                        11 => rcc::cfgr::PLLMUL_A::MUL11,
-                        12 => rcc::cfgr::PLLMUL_A::MUL12,
-                        13 => rcc::cfgr::PLLMUL_A::MUL13,
-                        14 => rcc::cfgr::PLLMUL_A::MUL14,
-                        15 => rcc::cfgr::PLLMUL_A::MUL15,
-                        16 => rcc::cfgr::PLLMUL_A::MUL16,
-                        17 => rcc::cfgr::PLLMUL_A::MUL16X,
-                        _ => unreachable!(),
-                    }
-                ))
-            } else if pll_div.is_some() {
-                Some(PllArithmetic::DIV(
-                    match pll_div as u8 {
-                        1 => rcc::cfgr2::PLLDIV_A::DIV1,
-                        2 => rcc::cfgr2::PLLDIV_A::DIV2,
-                        3 => rcc::cfgr2::PLLDIV_A::DIV3,
-                        4 => rcc::cfgr2::PLLDIV_A::DIV4,
-                        5 => rcc::cfgr2::PLLDIV_A::DIV5,
-                        6 => rcc::cfgr2::PLLDIV_A::DIV6,
-                        7 => rcc::cfgr2::PLLDIV_A::DIV7,
-                        8 => rcc::cfgr2::PLLDIV_A::DIV8,
-                        9 => rcc::cfgr2::PLLDIV_A::DIV9,
-                        10 => rcc::cfgr2::PLLDIV_A::DIV10,
-                        11 => rcc::cfgr2::PLLDIV_A::DIV11,
-                        12 => rcc::cfgr2::PLLDIV_A::DIV12,
-                        13 => rcc::cfgr2::PLLDIV_A::DIV13,
-                        14 => rcc::cfgr2::PLLDIV_A::DIV14,
-                        15 => rcc::cfgr2::PLLDIV_A::DIV15,
-                        16 => rcc::cfgr2::PLLDIV_A::DIV16,
-                        _ => unreachable!(),
-                    }
-                ))
-            };
-        }
-
-        (syclk, PllOptions {
+        (sysclk, PllOptions {
             src: pll_src,
             arithmetic: pll_arithmetic,
         })
@@ -326,7 +329,7 @@ impl CFGR {
         // If a sysclk is given, check if the PLL has to be used,
         // else select the system clock source, which is either HSI or HSE.
         if let Some(sysclk) = self.sysclk {
-            if let Some(hseclk) = self.hse.is_some() {
+            if let Some(hseclk) = self.hse {
                 if sysclk == hseclk {
                     // No need to use the PLL
                    (hseclk, rcc::cfgr::SW_A::HSE, None)
@@ -343,10 +346,12 @@ impl CFGR {
                     (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
                 }
             }
-        } else if let Some(hseclk) = self.hse.is_some() {
+        } else if let Some(hseclk) = self.hse {
+            // Use HSE as system clock
             (hseclk, rcc::cfgr::SW_A::HSE, None)
         } else  {
-            (sysclk, rcc::cfgr::SW_A::HSI, None)
+            // Use HSI as system clock
+            (HSI, rcc::cfgr::SW_A::HSI, None)
         }
     }
 
