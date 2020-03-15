@@ -230,11 +230,11 @@ impl CFGR {
         feature = "stm32f303xe",
         feature = "stm32f398",
     ))]
-    fn calc_pll(&self) -> (u32, PllOptions) {
+    fn calc_pll(&self, sysclk: u32) -> (u32, PllOptions) {
         let hclk = self.hse.unwrap_or(HSI);
 
         // Set pll muliplicator or divisor according to sysclk
-         let (pll_mul, pll_div): (Option<u32>, Option<u32>) = if let Some(sysclk) = self.sysclk {
+         let (pll_mul, pll_div): (Option<u32>, Option<u32>) =
             // Use the multiplicator to make sysclk faster than pllsrcclk
             if sysclk > hclk {
                 (Some(sysclk / hclk), None)
@@ -242,13 +242,11 @@ impl CFGR {
             } else if sysclk < hclk {
             // TODO This case differs for different devieces, which caan not devide HSI as it is
             // fixed to /2
+                // FIXME what about the default * 2 from PLL_MUL?
                 (None, Some(hclk / sysclk))
             } else {
                 (None, None)
-            }
-        } else {
-            (None, None)
-        };
+            };
 
         // Select hardware clock source of the PLL
         let pll_src = if self.hse.is_some() {
@@ -334,7 +332,7 @@ impl CFGR {
                     // No need to use the PLL
                    (hseclk, rcc::cfgr::SW_A::HSE, None)
                 } else {
-                    let clock_with_pll = self.calc_pll();
+                    let clock_with_pll = self.calc_pll(sysclk);
                     (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
                 }
             } else {
@@ -342,7 +340,7 @@ impl CFGR {
                     // No need to use the PLL
                     (HSI,rcc::cfgr::SW_A::HSE, None)
                 } else {
-                    let clock_with_pll = self.calc_pll();
+                    let clock_with_pll = self.calc_pll(sysclk);
                     (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
                 }
             }
