@@ -335,14 +335,12 @@ impl CFGR {
                     let clock_with_pll = self.calc_pll(sysclk);
                     (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
                 }
-            } else {
-                if sysclk == HSI {
+            } else if sysclk == HSI {
                     // No need to use the PLL
                     (HSI,rcc::cfgr::SW_A::HSE, None)
-                } else {
-                    let clock_with_pll = self.calc_pll(sysclk);
-                    (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
-                }
+            } else {
+                let clock_with_pll = self.calc_pll(sysclk);
+                (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
             }
         } else if let Some(hseclk) = self.hse {
             // Use HSE as system clock
@@ -466,7 +464,8 @@ impl CFGR {
                 .bits(hpre_bits)
                 .sw()
                 // TODO
-                .variant(sysclk_source)
+                .variant(sysclk_source);
+        });
 
         // set predvisor for devices, which have them
         if pllsrc_options.is_some() {
@@ -538,4 +537,96 @@ impl Clocks {
     pub fn usbclk_valid(&self) -> bool {
         self.usbclk_valid
     }
+}
+
+// TODO Try this method? https://github.com/stm32-rs/stm32f4xx-hal/blob/c888eaa4d7dcac9670102896e54945efb5c41a3b/src/rcc.rs#L128
+
+#[test]
+fn test_get_sysclk_source() {
+    // test with HSI without pll
+    let (sysclk, sysclk_source, pll_options) = CFGR::calc_sysclk();
+    assert!(cfgr.hse.is_none());
+    assert_eq!(sysclk == HSI);
+    assert_eq!(sysclk_source == rcc::cfgr::SW_A::HSI);
+    assert!(pll_options.is_none());
+
+    // test with HSE without pll
+    let cfgr = CFGR::use_hse(16.mhz());
+    let (sysclk, sysclk_source, pll_options) = cfgr.calc_sysclk();
+    assert!(cfgr.hse.is_some());
+    assert_eq!(sysclk == cfgr.hse.unwrap());
+    assert_eq!(sysclk_source == rcc::cfgr::SW_A::HSE);
+    assert!(pll_options.is_none());
+
+
+    // test with HSE with pll
+    let cfgr = CFGR::use_hse(8.mhz()).sysclk(48.mhz());
+    let (sysclk, sysclk_source, pll_options) = cfgr.calc_sysclk();
+    assert!(cfgr.hse.is_some());
+    assert_eq!(sysclk == 48.mhz().into());
+    assert_eq!(sysclk_source == rcc::cfgr::SW_A::PLL);
+    assert!(pll_options.is_some())
+}
+
+#[test]
+fn test_pll_setup() {
+    // Test if HSI_DIV2 was chosen as pll source
+    let cfgr = CFGR::sysclk(32.mhz());
+    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+    assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSI_DIV2);
+
+    // Test if HSE_DIV_PREDIV was chosen as pll source
+    let cfgr = CFGR::use_hse(8.mhz()).sysclk(32.mhz());
+    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+    assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSE_DIV_PREDIV);
+
+    // Test if HSI_DIV_PREDIV was chosen as pll source
+    // TODO HSI_DVI2 is only chosen no division is needed (only multiplication)
+    // For other devices, which have HSI /2 by default, do not allow division by 1, which means
+    // So the difference lies in the case that the other devices allow fine grained pll only for
+    // HSE not for HSI.
+    // TODO See context below
+    // So if something * 1 is needed, we **have** to devide by two
+    // In this case consider PLLTXPRE???
+    // So what todo with HSI/2 than, or when to choose HSI_DIV_PREDIV?
+    // TODO implementation thoughts
+    // Calculate needed divisor and multiplicator
+    // Check how it is realizable with PLL
+    // Special case the fact, that multiplication by one means division by 2 and multiplication by
+    // 2n
+    // Or not???
+    // The division multiplication "finder" can be it's own function
+    // Special caseing the register values has to be split by devices.
+    //
+    // **The real difference between those devices**
+    //
+    // - pll source clock is divided by two by default for HSI/2 devices.
+    // - division for HSI is not programmable for HSI/2 devices
+    #[cfg(any(
+        feature = "stm32f302xd",
+        feature = "stm32f302xe",
+        feature = "stm32f303xd",
+        feature = "stm32f303xe",
+        feature = "stm32f398",
+    ))]
+    {
+        // TODO pll div and multiplication are chosen quite differently
+        // if use want 48 mhz out of 32 mhz you could use (32 / 2) * 3 == 48
+        // or if you want 20 Mhz out of 8 Mhz (8 / 2) * 5
+        // or if you want 10 Mhz out of 8 Mhz (8 / 4) * 5
+        // or if you want 72 Mhz out of 32 Mhz (32 / 4) * 9
+        // or if you want 30 Mhz out of 16 Mhz (32 / 8) * 15
+        // or if you want 13 Mhz out of 16 Mhz (16 / 16) * 15
+        // or if you want 16 Mhz out of 8 Mhz (8 / 2) * 1, which is not possible, as * 1 is not
+        // allowed, so (8 / 2) * 4 is needed.
+        let cfgr = CFGR::use_hse(8.mhz()).sysclk(32.mhz());
+        let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+        assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSI_DIV_PREDIV);
+    }
+
+    let cfgr = CFGR::use_hse(32.mhz()).sysclk(16.mhz());
+    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+    assert_eq!(sysclk == 16.mhz().into());
+    assert_eq!(sysclk_source == rcc::cfgr::SW_A::PLL);
+    assert!(pll_options.is_some())
 }
