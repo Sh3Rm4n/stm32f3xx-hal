@@ -1,7 +1,5 @@
 //! Reset and Clock Control
 
-use core::cmp;
-
 use crate::stm32::{rcc, RCC};
 use cast::u32;
 
@@ -141,14 +139,67 @@ pub struct CFGR {
     sysclk: Option<u32>,
 }
 
-enum PllArithmetic {
-    MUL(rcc::cfgr::PLLMUL_A),
-    DIV(rcc::cfgr2::PREDIV_A),
+struct PllConfig {
+    src: rcc::cfgr::PLLSRC_A,
+    mul: rcc::cfgr::PLLMUL_A,
+    div: Option<rcc::cfgr2::PREDIV_A>,
 }
 
-struct PllOptions {
-    src: rcc::cfgr::PLLSRC_A,
-    arithmetic: Option<PllArithmetic>,
+/// Determine the [greatest common divisor](https://en.wikipedia.org/wiki/Greatest_common_divisor)
+///
+/// This function is based on the [Euclidean algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm).
+fn gcd(mut a: u32, mut b: u32) -> u32 {
+    while b != 0 {
+        let r = a % b;
+        a = b;
+        b = r;
+    }
+    a
+}
+
+/// Convert pll multiplicand into equivalent register field type
+fn into_pll_mul(mul: u8) -> rcc::cfgr::PLLMUL_A {
+    match mul {
+        2 => rcc::cfgr::PLLMUL_A::MUL2,
+        3 => rcc::cfgr::PLLMUL_A::MUL3,
+        4 => rcc::cfgr::PLLMUL_A::MUL4,
+        5 => rcc::cfgr::PLLMUL_A::MUL5,
+        6 => rcc::cfgr::PLLMUL_A::MUL6,
+        7 => rcc::cfgr::PLLMUL_A::MUL7,
+        8 => rcc::cfgr::PLLMUL_A::MUL8,
+        9 => rcc::cfgr::PLLMUL_A::MUL9,
+        10 => rcc::cfgr::PLLMUL_A::MUL10,
+        11 => rcc::cfgr::PLLMUL_A::MUL11,
+        12 => rcc::cfgr::PLLMUL_A::MUL12,
+        13 => rcc::cfgr::PLLMUL_A::MUL13,
+        14 => rcc::cfgr::PLLMUL_A::MUL14,
+        15 => rcc::cfgr::PLLMUL_A::MUL15,
+        16 => rcc::cfgr::PLLMUL_A::MUL16,
+        _ => unreachable!(),
+    }
+}
+
+/// Convert pll dividend into equivalent register field type
+fn into_pre_div(div: u8) -> rcc::cfgr2::PREDIV_A {
+    match div {
+        1 => rcc::cfgr2::PREDIV_A::DIV1,
+        2 => rcc::cfgr2::PREDIV_A::DIV2,
+        3 => rcc::cfgr2::PREDIV_A::DIV3,
+        4 => rcc::cfgr2::PREDIV_A::DIV4,
+        5 => rcc::cfgr2::PREDIV_A::DIV5,
+        6 => rcc::cfgr2::PREDIV_A::DIV6,
+        7 => rcc::cfgr2::PREDIV_A::DIV7,
+        8 => rcc::cfgr2::PREDIV_A::DIV8,
+        9 => rcc::cfgr2::PREDIV_A::DIV9,
+        10 => rcc::cfgr2::PREDIV_A::DIV10,
+        11 => rcc::cfgr2::PREDIV_A::DIV11,
+        12 => rcc::cfgr2::PREDIV_A::DIV12,
+        13 => rcc::cfgr2::PREDIV_A::DIV13,
+        14 => rcc::cfgr2::PREDIV_A::DIV14,
+        15 => rcc::cfgr2::PREDIV_A::DIV15,
+        16 => rcc::cfgr2::PREDIV_A::DIV16,
+        _ => unreachable!(),
+    }
 }
 
 impl CFGR {
@@ -198,7 +249,24 @@ impl CFGR {
         self
     }
 
-    /// Returns a tuple of the (pllsrclk frequency, pllmul, and pllsrc).
+    /// Calculate the values for the pll multiplicand (PLLMUL) and the pll dividend (PLLDIV).
+    ///
+    /// These values are chosen depending on the chosen system clock (SYSCLK) and the frequency of the
+    /// hardware clock (HSE / HSI).
+    ///
+    /// For these devices, PLL_SRC can selected between the internal oscillator (HSI) and
+    /// the external oscillator (HSE).
+    ///
+    /// HSI is divided by 2 before its transferred to PLL_SRC.
+    /// HSE can be divided between 2..16, before it is transferred to PLL_SRC.
+    /// After this system clock frequency (SYSCLK) can be changed via multiplicand.
+    /// The value can be multiplied with 2..16.
+    ///
+    /// To determine the optimal values, if HSE is chosen as PLL_SRC, the greatest common divisor
+    /// is calculated and the limitations of the possible values are taken into consideration.
+    ///
+    /// HSI is simpler to calculate, but the possible system clocks are less than HSE, because the
+    /// division is not configurable.
     #[cfg(not(any(
         feature = "stm32f302xd",
         feature = "stm32f302xe",
@@ -206,23 +274,85 @@ impl CFGR {
         feature = "stm32f303xe",
         feature = "stm32f398"
     )))]
-    fn calc_pll(&self) -> (u32, u32, rcc::cfgr::PLLSRC_A) {
-        let pllsrcclk = self.hse.unwrap_or(HSI / 2);
-        let pllmul = self.sysclk.unwrap_or(pllsrcclk) / pllsrcclk;
-        assert!(pllmul > 16);
+    fn calc_pll(&self, sysclk: u32) -> (u32, PllConfig) {
+        // Get the optimal value for the pll divisor (PLL_DIV) and multiplicand (PLL_MUL)
+        // Only for HSE PLL_DIV can be changed
+        let (pll_mul, pll_div): (u32, Some(u32)) = if let Some(hclk) = self.hse {
+            // Get the optimal value for the pll divisor (PLL_DIV) and multiplicand (PLL_MUL)
+            // with the greatest common divisor calculation.
+            let common_divisor = gcd(sysclk, hclk);
+            let mut dividend = sysclk / common_divisor;
+            let mut divisor = hclk / common_divisor;
+
+            // Check if the dividend can be represented by PLL_MUL
+            let pll_mul = if dividend == 1 {
+                // PLL_MUL minimal value is 2
+                dividend *= 2;
+                divisor *= 2;
+            } else {
+                dividend
+            };
+
+            // Check if the divisor can be represented by PRE_DIV
+            let pll_div = if divisor == 1 {
+                // PLL_MUL minimal value is 2
+                dividend *= 2;
+                divisor *= 2;
+            } else {
+                divisor
+            };
+
+            // PLL_MUL maximal value is 16
+            assert!(pll_mul <= 16);
+            // PRE_DIV minimal value is 2
+            assert!(pll_div <= 16);
+            (pll_mul, Some(pll_div))
+        }
+        // HSI division is always divided by 2 and has no adjustable division
+        else {
+            let pll_mul = Some(sysclk / (HSI / 2));
+            assert!(pll_mul <= 16);
+            (pll_mul, None)
+        };
+
+        let pll_mul = pll_mul.unwrap();
+
+        let sysclk = (hclk / pll_div.unwrap_or(1)) * pll_mul;
+        assert!(sysclk <= 72_000_000);
 
         let pllsrc = if self.hse.is_some() {
             rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
         } else {
             rcc::cfgr::PLLSRC_A::HSI_DIV2
         };
-        (pllsrcclk, pllmul, pllsrc)
+
+        // Convert into register bit field types
+        let pll_mul_bits = into_pll_mul(pll_mul as u8);
+        let pll_div_bits = pll_div.map(|pll_div| into_pre_div(pll_div as u8));
+
+        (
+            sysclk,
+            PllConfig {
+                src: pll_src,
+                mul: pll_mul_bits,
+                div: pll_div_bits,
+            },
+        )
     }
 
-    /// Calulate the values for the pll multiplicator (PLLMUL) and the pll divisior (PLLDIV).
+    /// Calculate the values for the pll multiplicand (PLLMUL) and the pll dividend (PLLDIV).
     ///
-    /// These values are chosen depending on the chosen system clock and the frequency of the src
-    /// clk
+    /// These values are chosen depending on the chosen system clock (SYSCLK) and the frequency of the harware
+    /// clk (HSI / HSE).
+    ///
+    /// For these devices, PLL_SRC can be set to choose between the internal oscillator (HSI) and
+    /// the external oscillator (HSE).
+    /// After this the system clock frequency (SYSCLK) can be changed via a division and a
+    /// multiplication block.
+    /// It can be divided from with values 1..16  and multiplicated from 2..16.
+    ///
+    /// To determine the optimal values, the greatest common divisor is calculated and the
+    /// limitations of the possible values are taken into considiration.
     #[cfg(any(
         feature = "stm32f302xd",
         feature = "stm32f302xe",
@@ -230,122 +360,95 @@ impl CFGR {
         feature = "stm32f303xe",
         feature = "stm32f398",
     ))]
-    fn calc_pll(&self, sysclk: u32) -> (u32, PllOptions) {
+    fn calc_pll(&self, sysclk: u32) -> (u32, PllConfig) {
         let hclk = self.hse.unwrap_or(HSI);
 
-        // Set pll muliplicator or divisor according to sysclk
-         let (pll_mul, pll_div): (Option<u32>, Option<u32>) =
-            // Use the multiplicator to make sysclk faster than pllsrcclk
-            if sysclk > hclk {
-                (Some(sysclk / hclk), None)
-            // Use the divisor to make sysclk slower than pllsrcclk
-            } else if sysclk < hclk {
-            // TODO This case differs for different devieces, which caan not devide HSI as it is
-            // fixed to /2
-                // FIXME what about the default * 2 from PLL_MUL?
-                (None, Some(hclk / sysclk))
-            } else {
-                (None, None)
-            };
+        // Get the optimal value for the pll divisor (PLL_DIV) and multiplcator (PLL_MUL)
+        // with the greatest common divisor calculation.
+        let common_divisor = gcd(sysclk, hclk);
+        let mut dividend = sysclk / common_divisor;
+        let mut divisor = hclk / common_divisor;
 
-        // Select hardware clock source of the PLL
-        let pll_src = if self.hse.is_some() {
-            rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
-        }
-        else {
-            // default to sysclk = hclk
-            if pll_mul.is_none() && pll_div.is_none() {
-                // PLLMUL is multiplicating with 2 by default.
-                // Enable the HSI_DIV2 source, which forces PREDIV to be dividing by 2.
-                rcc::cfgr::PLLSRC_A::HSI_DIV2
-            } else {
-                rcc::cfgr::PLLSRC_A::HSI_DIV_PREDIV
-            }
-        };
-
-
-        let pll_arithmetic = if let Some(mul) = pll_mul {
-            Some(PllArithmetic::MUL(
-                match mul as u8 {
-                    2 => rcc::cfgr::PLLMUL_A::MUL2,
-                    3 => rcc::cfgr::PLLMUL_A::MUL3,
-                    4 => rcc::cfgr::PLLMUL_A::MUL4,
-                    5 => rcc::cfgr::PLLMUL_A::MUL5,
-                    6 => rcc::cfgr::PLLMUL_A::MUL6,
-                    7 => rcc::cfgr::PLLMUL_A::MUL7,
-                    8 => rcc::cfgr::PLLMUL_A::MUL8,
-                    9 => rcc::cfgr::PLLMUL_A::MUL9,
-                    10 => rcc::cfgr::PLLMUL_A::MUL10,
-                    11 => rcc::cfgr::PLLMUL_A::MUL11,
-                    12 => rcc::cfgr::PLLMUL_A::MUL12,
-                    13 => rcc::cfgr::PLLMUL_A::MUL13,
-                    14 => rcc::cfgr::PLLMUL_A::MUL14,
-                    15 => rcc::cfgr::PLLMUL_A::MUL15,
-                    16 => rcc::cfgr::PLLMUL_A::MUL16,
-                    17 => rcc::cfgr::PLLMUL_A::MUL16X,
-                    _ => unreachable!(),
-                }
-            ))
-        } else if let Some(div) = pll_div {
-            Some(PllArithmetic::DIV(
-                match div as u8 {
-                    1 => rcc::cfgr2::PREDIV_A::DIV1,
-                    2 => rcc::cfgr2::PREDIV_A::DIV2,
-                    3 => rcc::cfgr2::PREDIV_A::DIV3,
-                    4 => rcc::cfgr2::PREDIV_A::DIV4,
-                    5 => rcc::cfgr2::PREDIV_A::DIV5,
-                    6 => rcc::cfgr2::PREDIV_A::DIV6,
-                    7 => rcc::cfgr2::PREDIV_A::DIV7,
-                    8 => rcc::cfgr2::PREDIV_A::DIV8,
-                    9 => rcc::cfgr2::PREDIV_A::DIV9,
-                    10 => rcc::cfgr2::PREDIV_A::DIV10,
-                    11 => rcc::cfgr2::PREDIV_A::DIV11,
-                    12 => rcc::cfgr2::PREDIV_A::DIV12,
-                    13 => rcc::cfgr2::PREDIV_A::DIV13,
-                    14 => rcc::cfgr2::PREDIV_A::DIV14,
-                    15 => rcc::cfgr2::PREDIV_A::DIV15,
-                    16 => rcc::cfgr2::PREDIV_A::DIV16,
-                    _ => unreachable!(),
-                }
-            ))
+        // Check if the dividend can be represented by PLL_MUL
+        let pll_mul = if dividend == 1 {
+            // PLL_MUL minimal value is 2
+            dividend *= 2;
+            divisor *= 2;
+            dividend
         } else {
-            // No division or multiplication
-            None
+            dividend
         };
 
-        let sysclk = (hclk / pll_div.unwrap_or(1)) * pll_mul.unwrap_or(1);
+        // PLL_MUL maximal value is 16
+        assert!(dividend <= 16);
+
+        // PRE_DIV maximal value is 16
+        assert!(divisor <= 16);
+        let pll_div = divisor;
+
+        let sysclk = (hclk / pll_div) * pll_mul;
         assert!(sysclk <= 72_000_000);
 
-        (sysclk, PllOptions {
-            src: pll_src,
-            arithmetic: pll_arithmetic,
-        })
+        // Select hardware clock source of the PLL
+        // TODO Check when HSI_DIV2 could be useful
+        let pll_src = if self.hse.is_some() {
+            rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
+        } else {
+            rcc::cfgr::PLLSRC_A::HSI_DIV_PREDIV
+        };
+
+        // Convert into register bit field types
+        let pll_mul_bits = into_pll_mul(pll_mul as u8);
+        let pll_div_bits = into_pre_div(pll_div as u8);
+
+        (
+            sysclk,
+            PllConfig {
+                src: pll_src,
+                mul: pll_mul_bits,
+                div: Some(pll_div_bits),
+            },
+        )
     }
 
-    /// Returns a tuple containing the effective sysclk rate and optional pll settings.
-    fn calc_sysclk(&self) -> (u32, rcc::cfgr::SW_A, Option<PllOptions>) {
+    /// Get the system clock, the system clock source and the pll_options, if needed.
+    ///
+    /// The system clock source is determined by the chosen system clock and the provided hardware
+    /// clock.
+    /// This function does only chose the PLL if needed, otherwise it will use the oscillator clock as system clock.
+    // TODO change function name
+    fn get_sysclk(&self) -> (u32, rcc::cfgr::SW_A, Option<PllConfig>) {
         // If a sysclk is given, check if the PLL has to be used,
         // else select the system clock source, which is either HSI or HSE.
         if let Some(sysclk) = self.sysclk {
             if let Some(hseclk) = self.hse {
                 if sysclk == hseclk {
                     // No need to use the PLL
-                   (hseclk, rcc::cfgr::SW_A::HSE, None)
+                    (hseclk, rcc::cfgr::SW_A::HSE, None)
                 } else {
                     let clock_with_pll = self.calc_pll(sysclk);
-                    (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
+                    (
+                        // TODO maybe move sysclk calc to here
+                        clock_with_pll.0,
+                        rcc::cfgr::SW_A::PLL,
+                        Some(clock_with_pll.1),
+                    )
                 }
             } else if sysclk == HSI {
-                    // No need to use the PLL
-                    (HSI,rcc::cfgr::SW_A::HSE, None)
+                // No need to use the PLL
+                (HSI, rcc::cfgr::SW_A::HSE, None)
             } else {
                 let clock_with_pll = self.calc_pll(sysclk);
-                (clock_with_pll.0, rcc::cfgr::SW_A::PLL, Some(clock_with_pll.1))
+                (
+                    clock_with_pll.0,
+                    rcc::cfgr::SW_A::PLL,
+                    Some(clock_with_pll.1),
+                )
             }
         } else if let Some(hseclk) = self.hse {
             // Use HSE as system clock
             (hseclk, rcc::cfgr::SW_A::HSE, None)
-        } else  {
+        } else {
             // Use HSI as system clock
             (HSI, rcc::cfgr::SW_A::HSI, None)
         }
@@ -353,7 +456,7 @@ impl CFGR {
 
     /// Freezes the clock configuration, making it effective
     pub fn freeze(self, acr: &mut ACR) -> Clocks {
-        let (sysclk, pll_options) = self.calc_sysclk();
+        let (sysclk, sysclk_source, pll_config) = self.get_sysclk();
 
         let hpre_bits = self
             .hclk
@@ -425,8 +528,7 @@ impl CFGR {
         // the USB clock is only valid if an external crystal is used, the PLL is enabled, and the
         // PLL output frequency is a supported one.
         // usbpre == false: divide clock by 1.5, otherwise no division
-        // TODO pll_options check needed?
-        let usb_ok = has_usb() && self.hse.is_some() && pll_options.is_some();
+        let usb_ok = has_usb() && self.hse.is_some();
         let (usbpre, usbclk_valid) = match (usb_ok, sysclk) {
             (true, 72_000_000) => (false, true),
             (true, 48_000_000) => (true, true),
@@ -443,15 +545,23 @@ impl CFGR {
             while rcc.cr.read().hserdy().bit_is_clear() {}
         }
 
-        if let Some((pllmul_bits, pllsrc)) = pll_options {
-            // enable PLL and wait for it to be ready
-            rcc.cfgr
-                .modify(|_, w| w.pllmul().bits(pllmul_bits).pllsrc().variant(pllsrc));
+        // enable PLL and wait for it to be ready
+        if let Some(pll_config) = pll_config {
+            rcc.cfgr.modify(|_, w| {
+                w.pllmul()
+                    .variant(pll_config.mul)
+                    .pllsrc()
+                    .variant(pll_config.src)
+            });
+
+            if let Some(pll_div) = pll_config.div {
+                rcc.cfgr2.modify(|_, w| w.prediv().variant(pll_div));
+            };
 
             rcc.cr.modify(|_, w| w.pllon().set_bit());
 
             while rcc.cr.read().pllrdy().bit_is_clear() {}
-        }
+        };
 
         // set prescalers and clock source
         rcc.cfgr.modify(|_, w| unsafe {
@@ -463,16 +573,8 @@ impl CFGR {
                 .hpre()
                 .bits(hpre_bits)
                 .sw()
-                // TODO
-                .variant(sysclk_source);
+                .variant(sysclk_source)
         });
-
-        // set predvisor for devices, which have them
-        if pllsrc_options.is_some() {
-            rcc.cfgr2.modify(|_, w| {
-                w.prediv.variant()
-            });
-        }
 
         Clocks {
             hclk: Hertz(hclk),
@@ -541,92 +643,91 @@ impl Clocks {
 
 // TODO Try this method? https://github.com/stm32-rs/stm32f4xx-hal/blob/c888eaa4d7dcac9670102896e54945efb5c41a3b/src/rcc.rs#L128
 
-#[test]
-fn test_get_sysclk_source() {
-    // test with HSI without pll
-    let (sysclk, sysclk_source, pll_options) = CFGR::calc_sysclk();
-    assert!(cfgr.hse.is_none());
-    assert_eq!(sysclk == HSI);
-    assert_eq!(sysclk_source == rcc::cfgr::SW_A::HSI);
-    assert!(pll_options.is_none());
+// #[test]
+// fn test_get_sysclk_source() {
+//     // test with HSI without pll
+//     let (sysclk, sysclk_source, pll_options) = CFGR::calc_sysclk();
+//     assert!(cfgr.hse.is_none());
+//     assert_eq!(sysclk == HSI);
+//     assert_eq!(sysclk_source == rcc::cfgr::SW_A::HSI);
+//     assert!(pll_options.is_none());
 
-    // test with HSE without pll
-    let cfgr = CFGR::use_hse(16.mhz());
-    let (sysclk, sysclk_source, pll_options) = cfgr.calc_sysclk();
-    assert!(cfgr.hse.is_some());
-    assert_eq!(sysclk == cfgr.hse.unwrap());
-    assert_eq!(sysclk_source == rcc::cfgr::SW_A::HSE);
-    assert!(pll_options.is_none());
+//     // test with HSE without pll
+//     let cfgr = CFGR::use_hse(16.mhz());
+//     let (sysclk, sysclk_source, pll_options) = cfgr.calc_sysclk();
+//     assert!(cfgr.hse.is_some());
+//     assert_eq!(sysclk == cfgr.hse.unwrap());
+//     assert_eq!(sysclk_source == rcc::cfgr::SW_A::HSE);
+//     assert!(pll_options.is_none());
 
+//     // test with HSE with pll
+//     let cfgr = CFGR::use_hse(8.mhz()).sysclk(48.mhz());
+//     let (sysclk, sysclk_source, pll_options) = cfgr.calc_sysclk();
+//     assert!(cfgr.hse.is_some());
+//     assert_eq!(sysclk == 48.mhz().into());
+//     assert_eq!(sysclk_source == rcc::cfgr::SW_A::PLL);
+//     assert!(pll_options.is_some())
+// }
 
-    // test with HSE with pll
-    let cfgr = CFGR::use_hse(8.mhz()).sysclk(48.mhz());
-    let (sysclk, sysclk_source, pll_options) = cfgr.calc_sysclk();
-    assert!(cfgr.hse.is_some());
-    assert_eq!(sysclk == 48.mhz().into());
-    assert_eq!(sysclk_source == rcc::cfgr::SW_A::PLL);
-    assert!(pll_options.is_some())
-}
+//#[test]
+//fn test_pll_setup() {
+//    // Test if HSI_DIV2 was chosen as pll source
+//    let cfgr = CFGR::sysclk(32.mhz());
+//    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+//    assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSI_DIV2);
 
-#[test]
-fn test_pll_setup() {
-    // Test if HSI_DIV2 was chosen as pll source
-    let cfgr = CFGR::sysclk(32.mhz());
-    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
-    assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSI_DIV2);
+//    // Test if HSE_DIV_PREDIV was chosen as pll source
+//    let cfgr = CFGR::use_hse(8.mhz()).sysclk(32.mhz());
+//    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+//    assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSE_DIV_PREDIV);
 
-    // Test if HSE_DIV_PREDIV was chosen as pll source
-    let cfgr = CFGR::use_hse(8.mhz()).sysclk(32.mhz());
-    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
-    assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSE_DIV_PREDIV);
+//    // Test if HSI_DIV_PREDIV was chosen as pll source
+//    // TODO HSI_DVI2 is only chosen no division is needed (only multiplication)
+//    // For other devices, which have HSI /2 by default, do not allow division by 1, which means
+//    // So the difference lies in the case that the other devices allow fine grained pll only for
+//    // HSE not for HSI.
+//    // TODO See context below
+//    // So if something * 1 is needed, we **have** to devide by two
+//    // In this case consider PLLTXPRE???
+//    // So what todo with HSI/2 than, or when to choose HSI_DIV_PREDIV?
+//    // TODO implementation thoughts
+//    // Calculate needed divisor and multiplicator
+//    // Check how it is realizable with PLL
+//    // Special case the fact, that multiplication by one means division by 2 and multiplication by
+//    // 2n
+//    // Or not???
+//    // The division multiplication "finder" can be it's own function
+//    // Special caseing the register values has to be split by devices.
+//    //
+//    // **The real difference between those devices**
+//    //
+//    // - pll source clock is divided by two by default for HSI/2 devices.
+//    // - division for HSI is not programmable for HSI/2 devices
+//    #[cfg(any(
+//        feature = "stm32f302xd",
+//        feature = "stm32f302xe",
+//        feature = "stm32f303xd",
+//        feature = "stm32f303xe",
+//        feature = "stm32f398",
+//    ))]
+//    {
+//        // TODO pll div and multiplication are chosen quite differently
+//        // if use want 48 mhz out of 32 mhz you could use (32 / 2) * 3 == 48
+//        // or if you want 20 Mhz out of 8 Mhz (8 / 2) * 5
+//        // or if you want 10 Mhz out of 8 Mhz (8 / 4) * 5
+//        // or if you want 72 Mhz out of 32 Mhz (32 / 4) * 9
+//        // or if you want 30 Mhz out of 16 Mhz (32 / 8) * 15
+//        // or if you want 13 Mhz out of 16 Mhz (16 / 16) * 15
+//        // or if you want 16 Mhz out of 8 Mhz (8 / 2) * 1, which is not possible, as * 1 is not
+//        // allowed, so (8 / 2) * 4 is needed.
+//        let cfgr = CFGR::use_hse(8.mhz()).sysclk(32.mhz());
+//        let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+//        assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSI_DIV_PREDIV);
+//    }
 
-    // Test if HSI_DIV_PREDIV was chosen as pll source
-    // TODO HSI_DVI2 is only chosen no division is needed (only multiplication)
-    // For other devices, which have HSI /2 by default, do not allow division by 1, which means
-    // So the difference lies in the case that the other devices allow fine grained pll only for
-    // HSE not for HSI.
-    // TODO See context below
-    // So if something * 1 is needed, we **have** to devide by two
-    // In this case consider PLLTXPRE???
-    // So what todo with HSI/2 than, or when to choose HSI_DIV_PREDIV?
-    // TODO implementation thoughts
-    // Calculate needed divisor and multiplicator
-    // Check how it is realizable with PLL
-    // Special case the fact, that multiplication by one means division by 2 and multiplication by
-    // 2n
-    // Or not???
-    // The division multiplication "finder" can be it's own function
-    // Special caseing the register values has to be split by devices.
-    //
-    // **The real difference between those devices**
-    //
-    // - pll source clock is divided by two by default for HSI/2 devices.
-    // - division for HSI is not programmable for HSI/2 devices
-    #[cfg(any(
-        feature = "stm32f302xd",
-        feature = "stm32f302xe",
-        feature = "stm32f303xd",
-        feature = "stm32f303xe",
-        feature = "stm32f398",
-    ))]
-    {
-        // TODO pll div and multiplication are chosen quite differently
-        // if use want 48 mhz out of 32 mhz you could use (32 / 2) * 3 == 48
-        // or if you want 20 Mhz out of 8 Mhz (8 / 2) * 5
-        // or if you want 10 Mhz out of 8 Mhz (8 / 4) * 5
-        // or if you want 72 Mhz out of 32 Mhz (32 / 4) * 9
-        // or if you want 30 Mhz out of 16 Mhz (32 / 8) * 15
-        // or if you want 13 Mhz out of 16 Mhz (16 / 16) * 15
-        // or if you want 16 Mhz out of 8 Mhz (8 / 2) * 1, which is not possible, as * 1 is not
-        // allowed, so (8 / 2) * 4 is needed.
-        let cfgr = CFGR::use_hse(8.mhz()).sysclk(32.mhz());
-        let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
-        assert_eq!(pll_options.src == rcc:::cfgr::PLLSRC_A::HSI_DIV_PREDIV);
-    }
-
-    let cfgr = CFGR::use_hse(32.mhz()).sysclk(16.mhz());
-    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
-    assert_eq!(sysclk == 16.mhz().into());
-    assert_eq!(sysclk_source == rcc::cfgr::SW_A::PLL);
-    assert!(pll_options.is_some())
-}
+//    let cfgr = CFGR::use_hse(32.mhz()).sysclk(16.mhz());
+//    let (sysclk, pll_options) = cfgr.calc_pll(cfgr.sysclk.unwrap());
+//    assert_eq!(sysclk == 16.mhz().into());
+//    assert_eq!(sysclk_source == rcc::cfgr::SW_A::PLL);
+//    assert!(pll_options.is_some())
+//}
