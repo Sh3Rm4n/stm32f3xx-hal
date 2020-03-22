@@ -275,52 +275,43 @@ impl CFGR {
         feature = "stm32f398"
     )))]
     fn calc_pll(&self, sysclk: u32) -> (u32, PllConfig) {
+        let pllsrcclk = self.hse.unwrap_or(HSI / 2);
         // Get the optimal value for the pll divisor (PLL_DIV) and multiplicand (PLL_MUL)
         // Only for HSE PLL_DIV can be changed
-        let (pll_mul, pll_div): (u32, Some(u32)) = if let Some(hclk) = self.hse {
+        let (pll_mul, pll_div): (u32, Option<u32>) = if self.hse.is_some() {
             // Get the optimal value for the pll divisor (PLL_DIV) and multiplicand (PLL_MUL)
             // with the greatest common divisor calculation.
-            let common_divisor = gcd(sysclk, hclk);
+            let common_divisor = gcd(sysclk, pllsrcclk);
             let mut dividend = sysclk / common_divisor;
-            let mut divisor = hclk / common_divisor;
-
-            // Check if the dividend can be represented by PLL_MUL
-            let pll_mul = if dividend == 1 {
-                // PLL_MUL minimal value is 2
-                dividend *= 2;
-                divisor *= 2;
-            } else {
-                dividend
-            };
-
-            // Check if the divisor can be represented by PRE_DIV
-            let pll_div = if divisor == 1 {
-                // PLL_MUL minimal value is 2
-                dividend *= 2;
-                divisor *= 2;
-            } else {
-                divisor
-            };
+            let mut divisor = pllsrcclk / common_divisor;
 
             // PLL_MUL maximal value is 16
-            assert!(pll_mul <= 16);
-            // PRE_DIV minimal value is 2
-            assert!(pll_div <= 16);
-            (pll_mul, Some(pll_div))
+            assert!(divisor <= 16);
+            // PRE_DIV maximal value is 16
+            assert!(dividend <= 16);
+
+            // Check if the dividend can be represented by PLL_MUL
+            // or if the divisor can be represented by PRE_DIV
+            if dividend == 1 || divisor == 1 {
+                // PLL_MUL minimal value is 2
+                dividend *= 2;
+                // PRE_DIV minimal value is 2
+                divisor *= 2;
+            }
+
+            (dividend, Some(divisor))
         }
         // HSI division is always divided by 2 and has no adjustable division
         else {
-            let pll_mul = Some(sysclk / (HSI / 2));
+            let pll_mul = sysclk / pllsrcclk;
             assert!(pll_mul <= 16);
             (pll_mul, None)
         };
 
-        let pll_mul = pll_mul.unwrap();
-
-        let sysclk = (hclk / pll_div.unwrap_or(1)) * pll_mul;
+        let sysclk = (pllsrcclk / pll_div.unwrap_or(1)) * pll_mul;
         assert!(sysclk <= 72_000_000);
 
-        let pllsrc = if self.hse.is_some() {
+        let pll_src = if self.hse.is_some() {
             rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
         } else {
             rcc::cfgr::PLLSRC_A::HSI_DIV2
@@ -369,6 +360,12 @@ impl CFGR {
         let mut dividend = sysclk / common_divisor;
         let mut divisor = hclk / common_divisor;
 
+        // PLL_MUL maximal value is 16
+        assert!(dividend <= 16);
+
+        // PRE_DIV maximal value is 16
+        assert!(divisor <= 16);
+
         // Check if the dividend can be represented by PLL_MUL
         let pll_mul = if dividend == 1 {
             // PLL_MUL minimal value is 2
@@ -379,18 +376,13 @@ impl CFGR {
             dividend
         };
 
-        // PLL_MUL maximal value is 16
-        assert!(dividend <= 16);
-
-        // PRE_DIV maximal value is 16
-        assert!(divisor <= 16);
         let pll_div = divisor;
 
         let sysclk = (hclk / pll_div) * pll_mul;
         assert!(sysclk <= 72_000_000);
 
         // Select hardware clock source of the PLL
-        // TODO Check when HSI_DIV2 could be useful
+        // TODO Check whether HSI_DIV2 could be useful
         let pll_src = if self.hse.is_some() {
             rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV
         } else {
@@ -416,7 +408,6 @@ impl CFGR {
     /// The system clock source is determined by the chosen system clock and the provided hardware
     /// clock.
     /// This function does only chose the PLL if needed, otherwise it will use the oscillator clock as system clock.
-    // TODO change function name
     fn get_sysclk(&self) -> (u32, rcc::cfgr::SW_A, Option<PllConfig>) {
         // If a sysclk is given, check if the PLL has to be used,
         // else select the system clock source, which is either HSI or HSE.
@@ -428,7 +419,6 @@ impl CFGR {
                 } else {
                     let clock_with_pll = self.calc_pll(sysclk);
                     (
-                        // TODO maybe move sysclk calc to here
                         clock_with_pll.0,
                         rcc::cfgr::SW_A::PLL,
                         Some(clock_with_pll.1),
