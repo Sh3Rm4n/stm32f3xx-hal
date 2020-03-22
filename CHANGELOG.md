@@ -9,17 +9,33 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-- Now system clocks  lower than HSI (internal 8 Mhz oscillator) or HSE (external
-  oscillator) are supported.
+- The system clock calculation is more fine grained now. ([#67](https://github.com/stm32-rs/stm32f3xx-hal/pull/67))
+  Now the system clock can be some obscure value, like 13 MHz, which can not a
+  be represented as a multiple of the oscillator clock:
+```rust
+let clocks = rcc
+    .cfgr
+    .use_hse(8.mhz())
+    .sysclk(13.mhz())
+
+// or
+let clocks = rcc
+    .cfgr
+    .use_hse(32.mhz())
+    .sysclk(72.mhz())
+```
+  This is possible through utilizing the divider, which can devide the
+  external oscillator clock on most devices. Some devices have even the
+  possibility to divide the internal oscillator clock. 
 
 ### Fixed
 
 - Wrong frequency reported by `MonoTimer` ([#56](https://github.com/stm32-rs/stm32f3xx-hal/pull/56))
+- `PLL` was calculated wrong for devices, which do not divide `HSI` ([#67](https://github.com/stm32-rs/stm32f3xx-hal/pull/67))
 
 ### Changed
 
 - Bump `stm32f3` dependency to `0.10.0` ([#42](https://github.com/stm32-rs/stm32f3xx-hal/pull/42))
-- `PLL` was calculated wrong for devices, which to not divide `HSI`
 
 ## [v0.4.1] - 2020-03-07
 
