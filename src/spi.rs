@@ -114,6 +114,20 @@ pub struct Spi<SPI, PINS> {
     pins: PINS,
 }
 
+fn compute_clock_variant(clocks: Hertz, freq: Hertz) -> u8 {
+    match clocks.0 / freq.0 {
+        0 => unreachable!(),
+        1..=2 => 0b00u8,
+        3..=5 => 0b01u8,
+        6..=11 => 0b10u8,
+        12..=23 => 0b11u8,
+        24..=39 => 0b100u8,
+        40..=95 => 0b101u8,
+        96..=191 => 0b110u8,
+        _ => 0b111u8,
+    }
+}
+
 macro_rules! hal {
     ($($SPIX:ident: ($spiX:ident, $APBX:ident, $spiXen:ident, $spiXrst:ident, $pclkX:ident),)+) => {
         $(
@@ -167,17 +181,7 @@ macro_rules! hal {
                             Polarity::IdleHigh => w.cpol().idle_high(),
                         };
 
-                        match clocks.$pclkX().0 / freq.into().0 {
-                            0 => unreachable!(),
-                            1..=2 => w.br().div2(),
-                            3..=5 => w.br().div4(),
-                            6..=11 => w.br().div8(),
-                            12..=23 => w.br().div16(),
-                            24..=39 => w.br().div32(),
-                            40..=95 => w.br().div64(),
-                            96..=191 => w.br().div128(),
-                            _ => w.br().div256(),
-                        };
+                        w.br().bits(compute_clock_variant(clocks.$pclkX(), freq.into()));
 
                         w.spe()
                             .enabled()
@@ -200,6 +204,17 @@ macro_rules! hal {
                 pub fn free(self) -> ($SPIX, (SCK, MISO, MOSI)) {
                     (self.spi, self.pins)
                 }
+
+                pub fn reclock<F>(&mut self, freq: F, clocks: Clocks)
+                    where F: Into<Hertz>
+                {
+                    self.spi.cr1.modify(|_, w| w.spe().disabled());
+                    self.spi.cr1.modify(|_, w| {
+                        w.br().bits(compute_clock_variant(clocks.$pclkX(), freq.into()));
+                        w.spe().enabled()
+                    });
+                }
+
             }
 
             impl<PINS> FullDuplex<u8> for Spi<$SPIX, PINS> {
