@@ -4,6 +4,7 @@ use core::ptr;
 
 use crate::hal::spi::FullDuplex;
 pub use crate::hal::spi::{Mode, Phase, Polarity};
+use crate::stm32::spi1;
 use crate::stm32::{SPI1, SPI2, SPI3};
 use nb;
 
@@ -114,17 +115,18 @@ pub struct Spi<SPI, PINS> {
     pins: PINS,
 }
 
-fn compute_clock_variant(clocks: Hertz, freq: Hertz) -> u8 {
+#[inline]
+fn compute_clock_variant(clocks: Hertz, freq: Hertz) -> spi1::cr1::BR_A {
     match clocks.0 / freq.0 {
         0 => unreachable!(),
-        1..=2 => 0b00u8,
-        3..=5 => 0b01u8,
-        6..=11 => 0b10u8,
-        12..=23 => 0b11u8,
-        24..=39 => 0b100u8,
-        40..=95 => 0b101u8,
-        96..=191 => 0b110u8,
-        _ => 0b111u8,
+        1..=2 => spi1::cr1::BR_A::DIV2,
+        3..=5 => spi1::cr1::BR_A::DIV4,
+        6..=11 => spi1::cr1::BR_A::DIV8,
+        12..=23 => spi1::cr1::BR_A::DIV16,
+        24..=39 => spi1::cr1::BR_A::DIV32,
+        40..=95 => spi1::cr1::BR_A::DIV64,
+        96..=191 => spi1::cr1::BR_A::DIV128,
+        _ => spi1::cr1::BR_A::DIV256,
     }
 }
 
@@ -181,7 +183,7 @@ macro_rules! hal {
                             Polarity::IdleHigh => w.cpol().idle_high(),
                         };
 
-                        w.br().bits(compute_clock_variant(clocks.$pclkX(), freq.into()));
+                        w.br().variant(compute_clock_variant(clocks.$pclkX(), freq.into()));
 
                         w.spe()
                             .enabled()
@@ -210,7 +212,7 @@ macro_rules! hal {
                 {
                     self.spi.cr1.modify(|_, w| w.spe().disabled());
                     self.spi.cr1.modify(|_, w| {
-                        w.br().bits(compute_clock_variant(clocks.$pclkX(), freq.into()));
+                        w.br().variant(compute_clock_variant(clocks.$pclkX(), freq.into()));
                         w.spe().enabled()
                     });
                 }
