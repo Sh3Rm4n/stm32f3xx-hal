@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Removed SPI1 support for `stm32f302x6` and `stm32f302x8` sub-targets
   and `stm32f318` target. ([#99](https://github.com/stm32-rs/stm32f3xx-hal/pull/99))
 - Removed I2C2 support for `stm32f303x6`, `stm32f303x8` and `stm32f328` targets. ([#164](https://github.com/stm32-rs/stm32f3xx-hal/pull/164))
+- `I2c::i2c1` and `I2c::i2c2` functions are renamed to `I2c::new`. ([#164](https://github.com/stm32-rs/stm32f3xx-hal/pull/164))
 
 ## [v0.5.0] - 2020-07-21
 
