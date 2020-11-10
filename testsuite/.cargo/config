@@ -1,0 +1,13 @@
+[target.thumbv7em-none-eabihf]
+# TODO maybe use cfg to check if in testmode or not,
+# than this testsuite could be added as a workspace.
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+# runner = "arm-none-eabi-gdb"
+runner = "probe-run --chip STM32F303VCTx --defmt"
+rustflags = [
+  # "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
+]
+
+[build]
+target = "thumbv7em-none-eabihf"
