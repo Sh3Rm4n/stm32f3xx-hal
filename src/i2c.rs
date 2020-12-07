@@ -40,40 +40,38 @@ pub enum Error {
     // Alert, // SMBUS mode only
 }
 
-// FIXME these should be "closed" traits
-/// SCL pin -- DO NOT IMPLEMENT THIS TRAIT
-pub unsafe trait SclPin<I2C> {}
 
-/// SDA pin -- DO NOT IMPLEMENT THIS TRAIT
-pub unsafe trait SdaPin<I2C> {}
+crate::sealed! {
+    impl SclPin<I2C1> where pin: gpioa::PA15<AF4>;
+    impl SclPin<I2C1> where pin: gpiob::PB6<AF4>;
+    impl SclPin<I2C1> where pin: gpiob::PB8<AF4>;
+    impl SdaPin<I2C1> where pin: gpioa::PA14<AF4>;
+    impl SdaPin<I2C1> where pin: gpiob::PB7<AF4>;
+    impl SdaPin<I2C1> where pin: gpiob::PB9<AF4>;
 
-unsafe impl SclPin<I2C1> for gpioa::PA15<AF4> {}
-unsafe impl SclPin<I2C1> for gpiob::PB6<AF4> {}
-unsafe impl SclPin<I2C1> for gpiob::PB8<AF4> {}
-unsafe impl SdaPin<I2C1> for gpioa::PA14<AF4> {}
-unsafe impl SdaPin<I2C1> for gpiob::PB7<AF4> {}
-unsafe impl SdaPin<I2C1> for gpiob::PB9<AF4> {}
+    #[cfg(not(feature = "gpio-f333"))]
+    impl SclPin<I2C2> where pin: gpioa::PA9<AF4>;
+    #[cfg(not(feature = "gpio-f333"))]
+    impl SclPin<I2C2> where pin: gpiof::PF1<AF4>;
+    #[cfg(all(not(featrue = "gpio-f333"), any(feature = "gpio-f303", feature = "gpio-f303e", feature = "gpio-f373")))]
+    impl SclPin<I2C2> where pin: gpiof::PF6<AF4>;
+    #[cfg(not(feature = "gpio-f333"))]
+    impl SdaPin<I2C2> where pin: gpioa::PA10<AF4>;
+    #[cfg(not(feature = "gpio-f333"))]
+    impl SdaPin<I2C2> where pin: gpiof::PF0<AF4>;
+    #[cfg(all(not(feature = "gpio-f333"), feature = "gpio-f373"))]
+    impl SdaPin<I2C2> where pin: gpiof::PF7<AF4>;
 
-cfg_if! {
-    if #[cfg(not(feature = "gpio-f333"))] {
-        unsafe impl SclPin<I2C2> for gpioa::PA9<AF4> {}
-        unsafe impl SclPin<I2C2> for gpiof::PF1<AF4> {}
-        #[cfg(any(feature = "gpio-f303", feature = "gpio-f303e", feature = "gpio-f373"))]
-        unsafe impl SclPin<I2C2> for gpiof::PF6<AF4> {}
-        unsafe impl SdaPin<I2C2> for gpioa::PA10<AF4> {}
-        unsafe impl SdaPin<I2C2> for gpiof::PF0<AF4> {}
-        #[cfg(feature = "gpio-f373")]
-        unsafe impl SdaPin<I2C2> for gpiof::PF7<AF4> {}
-    }
+    #[cfg(any(feature = "gpio-f302", feature = "gpio-f303e"))]
+    impl SclPin<I2C3> where pin: gpioa::PA8<AF3>;
+    #[cfg(any(feature = "gpio-f302", feature = "gpio-f303e"))]
+    impl SdaPin<I2C3> where pin: gpiob::PB5<AF8>;
+    #[cfg(any(feature = "gpio-f302", feature = "gpio-f303e"))]
+    impl SdaPin<I2C3> where pin: gpioc::PC9<AF3>;
 }
 
-cfg_if! {
-    if #[cfg(any(feature = "gpio-f302", feature = "gpio-f303e"))] {
-        unsafe impl SclPin<I2C3> for gpioa::PA8<AF3> {}
-        unsafe impl SdaPin<I2C3> for gpiob::PB5<AF8> {}
-        unsafe impl SdaPin<I2C3> for gpioc::PC9<AF3> {}
-    }
-}
+pub trait SclPin<I2C>: private::Sealed {}
+pub trait SdaPin<I2C>: private::Sealed {}
 
 /// I2C peripheral operating in master mode
 pub struct I2c<I2C, PINS> {
