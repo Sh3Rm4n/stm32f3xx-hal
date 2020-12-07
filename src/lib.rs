@@ -128,6 +128,8 @@ pub use crate::pac as stm32;
 #[cfg(feature = "rt")]
 pub use crate::pac::interrupt;
 
+mod macros;
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "device-selected")] {
         pub mod delay;
