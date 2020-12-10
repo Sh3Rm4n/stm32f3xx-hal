@@ -55,5 +55,6 @@ fn main() -> ! {
     loop {
         let adc1_in1_data: u16 = adc1.read(&mut adc1_in1_pin).expect("Error reading adc1.");
         hprintln!("PA0 reads {}", adc1_in1_data).ok();
+        asm::delay(2_000_000);
     }
 }
