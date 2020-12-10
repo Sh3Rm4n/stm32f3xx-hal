@@ -2,7 +2,8 @@
 #![no_std]
 #![no_main]
 
-use panic_semihosting as _;
+use defmt_rtt as _;
+use panic_probe as _;
 
 use stm32f3xx_hal as hal;
 
@@ -68,25 +69,27 @@ fn main() -> ! {
 
     let frame = CanFrame::new_data(CanId::BaseId(ID), &data);
 
-    block!(can_tx.transmit(&frame)).expect("Cannot send first CAN frame");
+    defmt::unwrap!(block!(can_tx.transmit(&frame)), "Cannot send first CAN frame");
 
     loop {
-        let rcv_frame = block!(rx0.receive()).expect("Cannot receive CAN frame");
+        let rcv_frame = defmt::unwrap!(block!(rx0.receive()), "Cannot receive CAN frame");
 
         if let Some(d) = rcv_frame.data() {
             let counter = d[0].wrapping_add(1);
 
             if counter % 3 == 0 {
                 led0.toggle().unwrap();
+                defmt::info!("Led Toggle, Counter {:?}", counter);
             }
 
             let data: [u8; 1] = [counter];
             let frame = CanFrame::new_data(CanId::BaseId(ID), &data);
 
-            block!(can_tx.transmit(&frame)).expect("Cannot send CAN frame");
+            defmt::unwrap!(block!(can_tx.transmit(&frame)), "Cannot send CAN frame");
         }
 
         iwdg.feed();
+        defmt::info!("Feed");
 
         asm::delay(1_000_000);
     }

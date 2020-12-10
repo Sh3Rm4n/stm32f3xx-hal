@@ -5,7 +5,8 @@
 #![no_std]
 #![no_main]
 
-use panic_semihosting as _;
+use defmt_rtt as _;
+use panic_probe as _;
 
 use cortex_m::{asm, singleton};
 use cortex_m_rt::entry;
@@ -49,7 +50,7 @@ fn main() -> ! {
     let (tx_buf, tx_channel, tx) = sending.wait();
     let (rx_buf, rx_channel, rx) = receiving.wait();
 
-    assert_eq!(tx_buf, rx_buf);
+    defmt::assert_eq!(tx_buf, rx_buf);
 
     // After a transfer is finished its parts can be re-used for another one.
     tx_buf.copy_from_slice(b"hi again!");
@@ -60,7 +61,7 @@ fn main() -> ! {
     let (tx_buf, ..) = sending.wait();
     let (rx_buf, ..) = receiving.wait();
 
-    assert_eq!(tx_buf, rx_buf);
+    defmt::assert_eq!(tx_buf, rx_buf);
 
     loop {
         asm::wfi();

@@ -8,11 +8,11 @@
 
 use core::ops::Range;
 
-use panic_semihosting as _;
+use defmt_rtt as _;
+use panic_probe as _;
 
 use cortex_m::asm;
 use cortex_m_rt::entry;
-use cortex_m_semihosting::{hprint, hprintln};
 
 use stm32f3xx_hal::{self as hal, pac, prelude::*};
 
@@ -35,25 +35,16 @@ fn main() -> ! {
     );
     let mut i2c = hal::i2c::I2c::new(dp.I2C1, pins, 100.khz(), clocks, &mut rcc.apb1);
 
-    hprintln!("Start i2c scanning...").expect("Error using hprintln.");
-    hprintln!().unwrap();
+    defmt::info!("Start i2c scanning ...");
 
     for addr in 0x00_u8..0x80 {
         // Write the empty array and check the slave response.
         if VALID_ADDR_RANGE.contains(&addr) && i2c.write(addr, &[]).is_ok() {
-            hprint!("{:02x}", addr).unwrap();
-        } else {
-            hprint!("..").unwrap();
-        }
-        if addr % 0x10 == 0x0F {
-            hprintln!().unwrap();
-        } else {
-            hprint!(" ").unwrap();
+            defmt::info!("{:u8}", addr);
         }
     }
 
-    hprintln!().unwrap();
-    hprintln!("Done!").unwrap();
+    defmt::info!("Done!");
 
     loop {
         asm::wfi();

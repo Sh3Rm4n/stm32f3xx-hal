@@ -3,7 +3,8 @@
 #![no_main]
 #![no_std]
 
-use panic_semihosting as _;
+use defmt_rtt as _;
+use panic_probe as _;
 
 use cortex_m::asm;
 use cortex_m_rt::entry;
@@ -46,10 +47,10 @@ fn main() -> ! {
             .downgrade(),
     ];
 
-    hprintln!("Start scanning pin array").unwrap();
+    defmt::info!("Start scanning pin array");
     loop {
         for pin in pin_array.iter_mut() {
-            hprintln!("Value is {}", pin.is_high().unwrap()).unwrap();
+            defmt::info!("Value is {:bool}", pin.is_high().unwrap());
             asm::delay(1_000_000);
         }
     }

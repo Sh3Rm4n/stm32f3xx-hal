@@ -3,7 +3,8 @@
 #![no_std]
 #![no_main]
 
-use panic_semihosting as _;
+use defmt_rtt as _;
+use panic_probe as _;
 
 use stm32f3xx_hal as hal;
 
@@ -60,7 +61,7 @@ fn main() -> ! {
 
     // Check, if msg_send and msg_received are identical.
     // This succeeds, when master and slave of the SPI are connected.
-    assert_eq!(msg_send, msg_received);
+    defmt::assert_eq!(msg_send, msg_received);
 
     loop {
         asm::wfi();

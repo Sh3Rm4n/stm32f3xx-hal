@@ -3,8 +3,10 @@
 
 //! Example usage for ADC on STM32F303
 
-use panic_semihosting as _;
+use defmt_rtt as _;
+use panic_probe as _;
 
+use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::hprintln;
 
@@ -40,7 +42,7 @@ fn main() -> ! {
     // Also know that integer division and the ADC hardware unit always round down.
     // To make up for those errors, see this forum entry:
     // [https://forum.allaboutcircuits.com/threads/why-adc-1024-is-correct-and-adc-1023-is-just-plain-wrong.80018/]
-    hprintln!("
+    defmt::info!("
     The ADC has a 12 bit resolution, i.e. if your reference Value is 3V:
         approx. ADC value | approx. volt value
         ==================+===================
@@ -50,11 +52,12 @@ fn main() -> ! {
 
     If you are using a STM32F3Discovery, PA0 is connected to the User Button.
     Pressing it should connect the user Button to to HIGH and the value should change from 0 to 4095.
-    ").expect("Error using hprintln.");
+    ");
 
     loop {
-        let adc1_in1_data: u16 = adc1.read(&mut adc1_in1_pin).expect("Error reading adc1.");
-        hprintln!("PA0 reads {}", adc1_in1_data).ok();
+        let adc1_in1_data: u16 =
+        defmt::unwrap!(adc1.read(&mut adc1_in1_pin), "Error reading adc1.");
+        defmt::info!("PA0 reads {:?}", adc1_in1_data);
         asm::delay(2_000_000);
     }
 }
