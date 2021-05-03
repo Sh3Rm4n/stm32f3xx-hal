@@ -17,7 +17,6 @@ use crate::gpio::{PushPull, AF7, AF9};
 use crate::rcc::APB1;
 use crate::stm32;
 use bxcan::RegisterBlock;
-use nb::{self, Error};
 
 use cfg_if::cfg_if;
 
@@ -25,8 +24,14 @@ mod sealed {
     pub trait Sealed {}
 }
 
+/// Marker trait for pins (with specific AF mode) that can be used as a CAN RX pin.
+///
+/// This trait is sealed, as it should not be implemented outside this module.
 pub trait RxPin: sealed::Sealed {}
 
+/// Marker trait for pins (with specific AF mode) that can be used as a CAN TX pin.
+///
+/// This trait is sealed, as it should not be implemented outside this module.
 pub trait TxPin: sealed::Sealed {}
 
 cfg_if! {
@@ -50,6 +55,9 @@ cfg_if! {
     }
 }
 
+/// Struct representing a CAN peripheral and its configured TX and RX pins.
+///
+/// See [`bxcan::Instance`] for more information on how to use the CAN interface.
 pub struct Can<TX, RX> {
     _can: stm32::CAN,
     _tx: TX,
@@ -61,6 +69,9 @@ where
     TX: TxPin,
     RX: RxPin,
 {
+    /// Create a new CAN instance, using the specified TX and RX pins.
+    ///
+    /// Note: this does not actually initialize the CAN bus. You will need to first call [`bxcan::Can::new`] and  set the bus configuration and filters before the peripheral can be enabled. See the CAN example, for a more thorough example of the full setup process.
     pub fn new(can: stm32::CAN, tx: TX, rx: RX, apb1: &mut APB1) -> Self {
         apb1.enr().modify(|_, w| w.canen().enabled());
         apb1.rstr().modify(|_, w| w.canrst().set_bit());
