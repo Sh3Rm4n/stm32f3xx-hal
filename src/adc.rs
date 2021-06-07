@@ -389,6 +389,7 @@ macro_rules! adc_hal {
                     if !self.rb.cr.read().aden().is_enable() {
                         // Set ADEN=1
                         self.rb.cr.modify(|_, w| w.aden().enable());
+                        #[cfg(feature = "defmt")]
                         defmt::debug!("Wait for ready");
                         // Wait until ADRDY=1 (ADRDY is set after the ADC startup time). This can be
                         // done using the associated interrupt (setting ADRDYIE=1).
