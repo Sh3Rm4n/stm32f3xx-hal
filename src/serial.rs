@@ -39,6 +39,10 @@ pub enum Event {
     ReceiveDataRegisterNotEmpty,
     /// Idle line state detected
     Idle,
+    /// The received character matched the configured character.
+    ///
+    /// The matching character can be configured with [`Serial::match_character`]
+    CharacterMatch,
 }
 
 /// Serial error
@@ -236,6 +240,7 @@ where
             Event::TransmissionComplete => w.tcie().enabled(),
             Event::ReceiveDataRegisterNotEmpty => w.rxneie().enabled(),
             Event::Idle => w.idleie().enabled(),
+            Event::CharacterMatch => w.cmie().enabled(),
         });
         self
     }
@@ -247,6 +252,7 @@ where
             Event::TransmissionComplete => w.tcie().disabled(),
             Event::ReceiveDataRegisterNotEmpty => w.rxneie().disabled(),
             Event::Idle => w.idleie().disabled(),
+            Event::CharacterMatch => w.cmie().disabled(),
         });
         self
     }
@@ -268,6 +274,9 @@ where
         if isr.idle().bit_is_set() {
             events |= Event::Idle;
         }
+        if isr.cmf().bit_is_set() {
+            events |= Event::CharacterMatch;
+        }
 
         events
     }
@@ -282,6 +291,21 @@ where
             Event::Idle => isr.idle().bit_is_set(),
             _ => false,
         }
+    }
+
+    /// Configuring the UART to match each received character,
+    /// with the configured one.
+    ///
+    /// If the character is matched [`Event::CharacterMatch`] is generated,
+    /// which can fire an intterrupt, if enabeled via [`Serial::listen()`]
+    pub fn match_character(&mut self, char: u8) -> &mut Self{
+        self.usart.cr2.modify(|_, w| w.add().bits(char));
+        self
+    }
+
+    /// Read out the configured match character.
+    pub fn read_match_character(&mut self) -> u8 {
+        self.usart.cr2.read().add().bits()
     }
 
     /// Return true if the tx register is empty (and can accept data)
