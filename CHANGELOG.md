@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-- `PXx` struct (representing a generic GPIO pin) implements `Send` and `Sync` [#251]
+- `PXx` struct (representing a generic GPIO pin) implements `Send` and `Sync` ([#251])
 
 ### Breaking Changes
 
@@ -360,6 +360,7 @@ let clocks = rcc
 
 [#255]: https://github.com/stm32-rs/stm32f3xx-hal/pull/255
 [#252]: https://github.com/stm32-rs/stm32f3xx-hal/pull/252
+[#251]: https://github.com/stm32-rs/stm32f3xx-hal/pull/251
 [#247]: https://github.com/stm32-rs/stm32f3xx-hal/pull/247
 [#246]: https://github.com/stm32-rs/stm32f3xx-hal/pull/246
 [#239]: https://github.com/stm32-rs/stm32f3xx-hal/pull/239
